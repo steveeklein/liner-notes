@@ -1,0 +1,109 @@
+import type {
+  AuthStatus,
+  MusicProvider,
+  PlaybackState,
+  SearchResult,
+  Track,
+  InfoCard,
+} from './types';
+
+const API_BASE = '/api';
+
+async function fetchAPI<T>(
+  endpoint: string,
+  options: RequestInit = {}
+): Promise<T> {
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `API error: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export const auth = {
+  login: (provider: MusicProvider, username: string, password: string) =>
+    fetchAPI<AuthStatus>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ provider, username, password }),
+    }),
+
+  logout: () => fetchAPI<{ status: string }>('/auth/logout', { method: 'POST' }),
+
+  getStatus: () => fetchAPI<AuthStatus>('/auth/status'),
+};
+
+export const playback = {
+  getState: () => fetchAPI<PlaybackState>('/playback/state'),
+
+  play: (trackId: string) =>
+    fetchAPI<{ status: string }>(`/playback/play/${trackId}`, { method: 'POST' }),
+
+  pause: () => fetchAPI<{ status: string }>('/playback/pause', { method: 'POST' }),
+
+  resume: () => fetchAPI<{ status: string }>('/playback/resume', { method: 'POST' }),
+
+  next: () => fetchAPI<{ status: string }>('/playback/next', { method: 'POST' }),
+
+  previous: () =>
+    fetchAPI<{ status: string }>('/playback/previous', { method: 'POST' }),
+
+  search: (query: string) =>
+    fetchAPI<SearchResult>(`/playback/search?query=${encodeURIComponent(query)}`),
+
+  getPlaylists: () => fetchAPI<{ id: string; name: string; track_count: number }[]>('/playback/playlists'),
+
+  getPlaylistTracks: (playlistId: string) =>
+    fetchAPI<Track[]>(`/playback/playlist/${playlistId}/tracks`),
+};
+
+export const cards = {
+  getCards: (trackId: string, source?: string) => {
+    const params = source ? `?source=${source}` : '';
+    return fetchAPI<InfoCard[]>(`/cards/${trackId}${params}`);
+  },
+
+  getCardDetail: (trackId: string, cardId: string) =>
+    fetchAPI<InfoCard>(`/cards/${trackId}/${cardId}`),
+
+  refresh: (trackId: string) =>
+    fetchAPI<{ status: string }>(`/cards/${trackId}/refresh`, { method: 'POST' }),
+
+  connectWebSocket: (
+    trackId: string,
+    onCard: (card: InfoCard) => void,
+    onError?: (error: Event) => void
+  ) => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = window.location.host;
+    const ws = new WebSocket(`${wsProtocol}//${wsHost}/api/cards/ws/${trackId}`);
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.error) {
+          console.error('Card WebSocket error:', data.error);
+        } else {
+          onCard(data as InfoCard);
+        }
+      } catch (e) {
+        console.error('Failed to parse card data:', e);
+      }
+    };
+
+    ws.onerror = (event) => {
+      console.error('WebSocket error:', event);
+      onError?.(event);
+    };
+
+    return ws;
+  },
+};

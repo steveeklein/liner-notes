@@ -1,0 +1,26 @@
+# Web framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.9
+websockets==12.0
+
+# Configuration
+python-dotenv==1.0.0
+pydantic==2.6.0
+
+# HTTP client
+httpx==0.26.0
+
+# Music service integration
+tidalapi==0.7.3
+
+# Data fetching & parsing
+beautifulsoup4==4.12.3
+wikipedia-api==0.6.0
+lxml==5.1.0
+
+# LLM integration
+openai==1.12.0
+
+# Optional: async improvements
+aiofiles==23.2.1
