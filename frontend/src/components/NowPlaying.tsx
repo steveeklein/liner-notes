@@ -137,16 +137,16 @@ export function NowPlaying({
       {/* Mobile layout: stacked */}
       <div className="lg:hidden">
         {/* Album section - centered */}
-        <div className="h-[50vh] min-h-[300px] flex flex-col items-center justify-center p-4 gap-4">
+        <div className="h-[65vh] min-h-[450px] flex flex-col items-center justify-center p-4 gap-4">
           {/* Album art */}
           {track.cover_url ? (
             <img
               src={track.cover_url}
               alt={track.album || ''}
-              className="w-[min(calc(60vh-120px),90vw)] h-[min(calc(60vh-120px),90vw)] min-w-[242px] min-h-[242px] max-w-[425px] max-h-[425px] rounded-xl object-cover shadow-2xl"
+              className="w-[min(calc(65vh-100px),90vw)] h-[min(calc(65vh-100px),90vw)] min-w-[363px] min-h-[363px] max-w-[640px] max-h-[640px] rounded-xl object-cover shadow-2xl"
             />
           ) : (
-            <div className="w-[min(calc(60vh-120px),90vw)] h-[min(calc(60vh-120px),90vw)] min-w-[242px] min-h-[242px] max-w-[425px] max-h-[425px] rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center">
+            <div className="w-[min(calc(65vh-100px),90vw)] h-[min(calc(65vh-100px),90vw)] min-w-[363px] min-h-[363px] max-w-[640px] max-h-[640px] rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center">
               <svg className="w-16 h-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
@@ -173,16 +173,16 @@ export function NowPlaying({
       {/* Desktop layout: side by side */}
       <div className="hidden lg:flex min-h-full">
         {/* Left sidebar - Album */}
-        <div className="w-[485px] xl:w-[550px] shrink-0 sticky top-0 h-screen flex flex-col items-center justify-center p-8 gap-5 bg-[#0f0f0f]">
+        <div className="w-[680px] xl:w-[780px] shrink-0 sticky top-0 h-screen flex flex-col items-center justify-center p-8 gap-5 bg-[#0f0f0f]">
           {/* Album art */}
           {track.cover_url ? (
             <img
               src={track.cover_url}
               alt={track.album || ''}
-              className="w-[387px] xl:w-[436px] h-[387px] xl:h-[436px] rounded-xl object-cover shadow-2xl"
+              className="w-[580px] xl:w-[654px] h-[580px] xl:h-[654px] rounded-xl object-cover shadow-2xl"
             />
           ) : (
-            <div className="w-[387px] xl:w-[436px] h-[387px] xl:h-[436px] rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center">
+            <div className="w-[580px] xl:w-[654px] h-[580px] xl:h-[654px] rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center">
               <svg className="w-20 h-20 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
