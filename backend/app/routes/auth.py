@@ -9,8 +9,19 @@ router = APIRouter()
 
 def get_spotify_redirect_uri(request: Request) -> str:
     """Build Spotify redirect URI from request."""
-    base_url = os.getenv("BASE_URL", str(request.base_url).rstrip("/"))
+    base_url = os.getenv("BASE_URL")
+    if not base_url:
+        # Use 127.0.0.1 for local development (Spotify requires this format)
+        host = request.headers.get("host", "127.0.0.1:8000")
+        if "localhost" in host:
+            host = host.replace("localhost", "127.0.0.1")
+        base_url = f"http://{host}"
     return f"{base_url}/api/auth/spotify/callback"
+
+
+def get_frontend_url() -> str:
+    """Get the frontend URL for redirects after auth."""
+    return os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 
 @router.post("/login", response_model=AuthStatus)
@@ -50,19 +61,21 @@ async def spotify_login(request: Request):
 @router.get("/spotify/callback")
 async def spotify_callback(request: Request, code: str = None, error: str = None):
     """Handle Spotify OAuth callback."""
+    frontend_url = get_frontend_url()
+    
     if error:
-        return RedirectResponse(url="/?error=spotify_auth_denied")
+        return RedirectResponse(url=f"{frontend_url}/?error=spotify_auth_denied")
     
     if not code:
-        return RedirectResponse(url="/?error=spotify_no_code")
+        return RedirectResponse(url=f"{frontend_url}/?error=spotify_no_code")
     
     redirect_uri = get_spotify_redirect_uri(request)
     success = await music_service.complete_spotify_auth(code, redirect_uri)
     
     if success:
-        return RedirectResponse(url="/?spotify=connected")
+        return RedirectResponse(url=f"{frontend_url}/?spotify=connected")
     else:
-        return RedirectResponse(url="/?error=spotify_auth_failed")
+        return RedirectResponse(url=f"{frontend_url}/?error=spotify_auth_failed")
 
 
 @router.post("/logout")

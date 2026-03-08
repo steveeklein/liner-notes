@@ -1,11 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { NowPlaying } from './components/NowPlaying';
-import { CardFeed } from './components/CardFeed';
 import { MiniPlayer } from './components/MiniPlayer';
 import { SearchSheet } from './components/SearchSheet';
 import { CardDetail } from './components/CardDetail';
-import { auth } from './api';
+import { auth, playback } from './api';
 import type { AuthStatus, Track, InfoCard } from './types';
 
 type Screen = 'home' | 'now-playing' | 'search';
@@ -18,6 +17,8 @@ function App() {
   const [activeScreen, setActiveScreen] = useState<Screen>('home');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const lastTrackIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     auth.getStatus()
@@ -25,6 +26,42 @@ function App() {
       .catch(() => setAuthStatus({ authenticated: false, provider: null, user_name: null }))
       .finally(() => setIsLoading(false));
   }, []);
+
+  // Poll Spotify for currently playing track
+  useEffect(() => {
+    if (!authStatus?.authenticated) return;
+
+    let pollInterval: NodeJS.Timeout;
+    
+    const pollPlayback = async () => {
+      try {
+        const state = await playback.getState();
+        
+        if (state.current_track && state.is_playing) {
+          // New track detected
+          if (state.current_track.id !== lastTrackIdRef.current) {
+            lastTrackIdRef.current = state.current_track.id;
+            setCurrentTrack(state.current_track);
+            setCards([]);
+            setSelectedCard(null);
+            setActiveScreen('now-playing');
+          }
+          setIsListening(true);
+        } else {
+          setIsListening(false);
+        }
+      } catch (err) {
+        console.error('Playback poll error:', err);
+        setIsListening(false);
+      }
+    };
+
+    // Poll every 3 seconds
+    pollPlayback();
+    pollInterval = setInterval(pollPlayback, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [authStatus?.authenticated]);
 
   const handleLogin = useCallback((status: AuthStatus) => {
     setAuthStatus(status);
@@ -47,7 +84,10 @@ function App() {
 
   const handleNewCard = useCallback((card: InfoCard) => {
     setCards((prev) => {
-      const exists = prev.some((c) => c.id === card.id);
+      // Deduplicate by source + title to avoid duplicates from reconnections
+      const exists = prev.some(
+        (c) => c.source === card.source && c.title === card.title
+      );
       if (exists) return prev;
       return [...prev, card];
     });
@@ -119,11 +159,23 @@ function App() {
                   {getGreeting()}
                 </h2>
                 <p className="text-gray-400">
-                  {currentTrack 
-                    ? 'Tap the player to see liner notes'
-                    : 'Search for music to get started'
+                  {isListening 
+                    ? 'Listening to Spotify...'
+                    : currentTrack 
+                      ? 'Tap the player to see liner notes'
+                      : 'Play something in Spotify to get started'
                   }
                 </p>
+                {isListening && (
+                  <div className="flex items-center gap-2 mt-2 text-green-500">
+                    <div className="flex gap-0.5">
+                      <span className="w-1 h-3 bg-green-500 rounded-full animate-pulse" />
+                      <span className="w-1 h-4 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.1s'}} />
+                      <span className="w-1 h-2 bg-green-500 rounded-full animate-pulse" style={{animationDelay: '0.2s'}} />
+                    </div>
+                    <span className="text-sm font-medium">Connected to Spotify</span>
+                  </div>
+                )}
               </div>
 
               {/* Quick Actions */}

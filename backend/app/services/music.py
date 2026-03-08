@@ -195,6 +195,8 @@ class SpotifyProvider(MusicProviderInterface):
     
     def get_auth_url(self, redirect_uri: str) -> str:
         """Generate Spotify OAuth authorization URL."""
+        from urllib.parse import urlencode
+        
         scopes = [
             "user-read-playback-state",
             "user-modify-playback-state",
@@ -211,11 +213,12 @@ class SpotifyProvider(MusicProviderInterface):
             "scope": " ".join(scopes),
             "show_dialog": "true",
         }
-        query = "&".join(f"{k}={v}" for k, v in params.items())
-        return f"https://accounts.spotify.com/authorize?{query}"
+        return f"https://accounts.spotify.com/authorize?{urlencode(params)}"
     
     async def exchange_code(self, code: str, redirect_uri: str) -> bool:
         """Exchange authorization code for access token."""
+        import sys
+        print(f"[Spotify] Exchanging code with redirect_uri: {redirect_uri}", flush=True)
         try:
             credentials = base64.b64encode(
                 f"{self.client_id}:{self.client_secret}".encode()
@@ -236,21 +239,25 @@ class SpotifyProvider(MusicProviderInterface):
                     timeout=10.0
                 )
                 
+                print(f"[Spotify] Token exchange response: {response.status_code}", flush=True)
+                
                 if response.status_code == 200:
                     data = response.json()
                     self.access_token = data.get("access_token")
                     self.refresh_token = data.get("refresh_token")
+                    print(f"[Spotify] Got access_token: {bool(self.access_token)}", flush=True)
                     
                     user_info = await self._get_user_profile()
+                    print(f"[Spotify] User info: {user_info}", flush=True)
                     if user_info:
                         self.user_name = user_info.get("display_name") or user_info.get("id")
                     
                     return True
                     
-                print(f"Spotify token exchange failed: {response.text}")
+                print(f"[Spotify] Token exchange failed: {response.text}", flush=True)
                 return False
         except Exception as e:
-            print(f"Spotify exchange error: {e}")
+            print(f"[Spotify] Exchange error: {e}", flush=True)
             return False
     
     async def _refresh_access_token(self) -> bool:
@@ -291,7 +298,9 @@ class SpotifyProvider(MusicProviderInterface):
     async def _api_request(self, method: str, endpoint: str, **kwargs) -> dict | None:
         """Make an authenticated API request."""
         if not self.access_token:
+            print(f"[Spotify] API request failed: No access token for {endpoint}", flush=True)
             return None
+        print(f"[Spotify] API request: {method} {endpoint}", flush=True)
         
         headers = {"Authorization": f"Bearer {self.access_token}"}
         
@@ -316,13 +325,18 @@ class SpotifyProvider(MusicProviderInterface):
                             **kwargs
                         )
                 
+                print(f"[Spotify] API response: {response.status_code}", flush=True)
                 if response.status_code in (200, 201):
-                    return response.json() if response.text else {}
+                    data = response.json() if response.text else {}
+                    print(f"[Spotify] API data keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}", flush=True)
+                    return data
                 elif response.status_code == 204:
                     return {}
+                else:
+                    print(f"[Spotify] API error response: {response.text[:500]}", flush=True)
                     
         except Exception as e:
-            print(f"Spotify API error: {e}")
+            print(f"[Spotify] API error: {e}", flush=True)
         
         return None
     
@@ -347,7 +361,8 @@ class SpotifyProvider(MusicProviderInterface):
     
     async def get_playback_state(self) -> PlaybackState:
         """Get current playback state from Spotify."""
-        data = await self._api_request("GET", "/me/player")
+        # Try currently-playing endpoint first (works more reliably)
+        data = await self._api_request("GET", "/me/player/currently-playing")
         
         if data and data.get("item"):
             item = data["item"]

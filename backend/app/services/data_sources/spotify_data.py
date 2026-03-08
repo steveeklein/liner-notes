@@ -116,6 +116,25 @@ class SpotifyDataSource(DataSource):
             print(f"Spotify related artists error: {e}")
         return []
     
+    async def _get_artist_info(self, artist_id: str) -> dict | None:
+        """Get artist details including genres and followers."""
+        token = await self._get_access_token()
+        if not token:
+            return None
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.BASE_URL}/artists/{artist_id}",
+                    headers={"Authorization": f"Bearer {token}"},
+                    timeout=10.0
+                )
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            print(f"Spotify artist info error: {e}")
+        return None
+    
     def _describe_audio_features(self, features: dict) -> str:
         """Generate human-readable description of audio features."""
         descriptions = []
@@ -184,22 +203,25 @@ class SpotifyDataSource(DataSource):
                     category="song"
                 ))
         
-        popularity = track.get("popularity", 0)
-        if popularity > 0:
-            popularity_desc = "viral hit" if popularity > 80 else "popular" if popularity > 50 else "growing"
-            cards.append(InfoCard(
-                id=str(uuid.uuid4()),
-                source=CardSource.SPOTIFY_DATA,
-                title="Popularity Score",
-                summary=f"This track has a popularity score of {popularity}/100 on Spotify ({popularity_desc})",
-                track_id=track_id,
-                category="charts"
-            ))
-        
         artists = track.get("artists", [])
         if artists:
             artist_id = artists[0].get("id")
             if artist_id:
+                # Get artist info (genres)
+                artist_info = await self._get_artist_info(artist_id)
+                if artist_info:
+                    genres = artist_info.get("genres", [])
+                    if genres:
+                        cards.append(InfoCard(
+                            id=str(uuid.uuid4()),
+                            source=CardSource.SPOTIFY_DATA,
+                            title="Genre & Style",
+                            summary=f"Classified as: {', '.join(genres[:5])}",
+                            track_id=track_id,
+                            category="genre"
+                        ))
+                
+                # Get related artists
                 related = await self._get_related_artists(artist_id)
                 if related:
                     related_names = [a.get("name") for a in related[:6]]

@@ -72,52 +72,43 @@ class RedditSource(DataSource):
     ) -> List[InfoCard]:
         cards = []
         
-        song_posts = await self._search_reddit(f'"{artist}" "{track_title}"')
+        # Try multiple search strategies
+        search_queries = [
+            f'{artist} {track_title}',
+            f'{artist}',
+        ]
         
-        relevant_posts = []
-        for post in song_posts:
-            subreddit = post.get("subreddit", "")
-            if subreddit.lower() in [s.lower() for s in self.music_subreddits]:
-                relevant_posts.append(post)
-        
-        if relevant_posts:
-            post = relevant_posts[0]
-            cards.append(InfoCard(
-                id=str(uuid.uuid4()),
-                source=CardSource.REDDIT,
-                title=f"Discussion: {post.get('title', '')[:60]}...",
-                summary=f"r/{post.get('subreddit')} • {post.get('score', 0)} upvotes • {post.get('num_comments', 0)} comments",
-                url=f"https://reddit.com{post.get('permalink', '')}",
-                track_id=track_id,
-                category="trivia"
-            ))
-        
-        artist_sub = await self._get_artist_subreddit(artist)
-        if artist_sub:
-            sub_posts = await self._search_reddit(track_title, subreddit=artist_sub)
-            if sub_posts:
-                post = sub_posts[0]
-                cards.append(InfoCard(
-                    id=str(uuid.uuid4()),
-                    source=CardSource.REDDIT,
-                    title=f"r/{artist_sub}: {post.get('title', '')[:50]}",
-                    summary=f"From the {artist} fan community • {post.get('num_comments', 0)} comments",
-                    url=f"https://reddit.com{post.get('permalink', '')}",
-                    track_id=track_id,
-                    category="trivia"
-                ))
-        
-        letstalk_posts = await self._search_reddit(f'"{artist}"', subreddit="LetsTalkMusic")
-        for post in letstalk_posts[:1]:
-            if post.get("score", 0) > 10:
-                cards.append(InfoCard(
-                    id=str(uuid.uuid4()),
-                    source=CardSource.REDDIT,
-                    title="Music Analysis Discussion",
-                    summary=f"{post.get('title', '')[:100]}",
-                    url=f"https://reddit.com{post.get('permalink', '')}",
-                    track_id=track_id,
-                    category="trivia"
-                ))
+        for query in search_queries:
+            if len(cards) >= 2:
+                break
+                
+            posts = await self._search_reddit(query)
+            
+            for post in posts:
+                if len(cards) >= 2:
+                    break
+                    
+                subreddit = post.get("subreddit", "").lower()
+                score = post.get("score", 0)
+                title = post.get("title", "")
+                
+                # Check if it's from a music subreddit and has decent engagement
+                is_music_sub = subreddit in [s.lower() for s in self.music_subreddits]
+                
+                if is_music_sub and score >= 5 and len(title) > 10:
+                    # Avoid duplicate titles
+                    existing_titles = [c.title for c in cards]
+                    short_title = title[:60] + "..." if len(title) > 60 else title
+                    
+                    if short_title not in existing_titles:
+                        cards.append(InfoCard(
+                            id=str(uuid.uuid4()),
+                            source=CardSource.REDDIT,
+                            title=short_title,
+                            summary=f"r/{post.get('subreddit')} • {score} upvotes • {post.get('num_comments', 0)} comments",
+                            url=f"https://reddit.com{post.get('permalink', '')}",
+                            track_id=track_id,
+                            category="trivia"
+                        ))
         
         return cards

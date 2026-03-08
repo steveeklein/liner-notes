@@ -13,12 +13,23 @@ export function InfoCardComponent({ card, onClick, onDismiss, style }: InfoCardC
 
   return (
     <div
-      className="bg-[#252525] rounded-xl overflow-hidden animate-slide-in card-shadow"
+      className="bg-[#252525] rounded-xl overflow-hidden animate-slide-in card-shadow relative"
       style={style}
     >
+      {/* Dismiss button - positioned absolutely */}
+      <button
+        onClick={onDismiss}
+        className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-300 rounded-full hover:bg-white/10 transition-colors z-10"
+      >
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+        </svg>
+      </button>
+
+      {/* Card content */}
       <button
         onClick={onClick}
-        className="w-full text-left p-4 haptic active:bg-[#2a2a2a] transition-colors"
+        className="w-full text-left p-4 pr-12 haptic active:bg-[#2a2a2a] transition-colors"
       >
         <div className="flex items-start gap-3">
           {card.image_url && (
@@ -53,18 +64,6 @@ export function InfoCardComponent({ card, onClick, onDismiss, style }: InfoCardC
               </div>
             )}
           </div>
-
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onDismiss();
-            }}
-            className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-300 rounded-full hover:bg-white/10 transition-colors flex-shrink-0"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
       </button>
     </div>

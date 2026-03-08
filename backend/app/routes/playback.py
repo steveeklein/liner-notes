@@ -5,6 +5,7 @@ import json
 
 from app.models import Track, PlaybackState, SearchResult
 from app.services.music import music_service
+from app.services.card_generator import card_generator
 
 router = APIRouter()
 
@@ -38,7 +39,18 @@ async def playback_websocket(websocket: WebSocket):
 @router.get("/state", response_model=PlaybackState)
 async def get_playback_state():
     """Get current playback state."""
-    return await music_service.get_playback_state()
+    state = await music_service.get_playback_state()
+    
+    # Register track info for card generation
+    if state.current_track:
+        card_generator.set_track_info(
+            track_id=state.current_track.id,
+            artist=state.current_track.artist,
+            title=state.current_track.title,
+            album=state.current_track.album or ""
+        )
+    
+    return state
 
 
 @router.post("/play/{track_id}")

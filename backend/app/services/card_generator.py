@@ -82,7 +82,11 @@ class CardGenerator:
         Each source generates cards asynchronously, allowing cards
         to appear progressively in the UI.
         """
+        print(f"[Cards] Generating cards for track_id: {track_id}", flush=True)
+        print(f"[Cards] Known tracks: {list(self.track_info.keys())}", flush=True)
+        
         if track_id not in self.track_info:
+            print(f"[Cards] ERROR: No track info for {track_id}. Need to fetch playback state first.", flush=True)
             return
         
         info = self.track_info[track_id]
@@ -93,38 +97,43 @@ class CardGenerator:
         async def fetch_from_source(source_type: CardSource):
             source = self.sources[source_type]
             try:
+                print(f"[Cards] Fetching from {source_type.value}...", flush=True)
                 cards = await source.fetch(
                     artist=artist,
                     track_title=title,
                     album=album,
                     track_id=track_id
                 )
+                print(f"[Cards] {source_type.value} returned {len(cards)} cards", flush=True)
                 return cards
             except Exception as e:
-                print(f"Error fetching from {source_type}: {e}")
+                print(f"[Cards] Error from {source_type.value}: {e}", flush=True)
                 return []
         
+        # Priority sources: Free, no API key required, reliable
         priority_sources = [
             CardSource.WIKIPEDIA,
-            CardSource.GENIUS,
+            CardSource.GENIUS,  # Has free fallback
             CardSource.MUSICBRAINZ,
+            CardSource.DISCOGS,  # Free public API
         ]
         
+        # Secondary sources: Mix of free and paid
         secondary_sources = [
-            CardSource.LASTFM,
-            CardSource.ALLMUSIC,
-            CardSource.DISCOGS,
-            CardSource.WHOSAMPLED,
-            CardSource.SPOTIFY_DATA,
+            CardSource.REDDIT,  # Free public API
+            CardSource.WEB_SEARCH,  # DuckDuckGo fallback is free
+            CardSource.SPOTIFY_DATA,  # Uses existing auth
+            CardSource.LASTFM,  # Requires API key
+            CardSource.ALLMUSIC,  # Web scraping (may be flaky)
         ]
         
+        # Tertiary sources: Web scraping or paid APIs
         tertiary_sources = [
-            CardSource.BILLBOARD,
-            CardSource.SETLISTFM,
-            CardSource.YOUTUBE,
-            CardSource.REDDIT,
-            CardSource.WEB_SEARCH,
-            CardSource.LLM,
+            CardSource.WHOSAMPLED,  # Web scraping
+            CardSource.BILLBOARD,  # Web scraping
+            CardSource.SETLISTFM,  # Requires API key
+            CardSource.YOUTUBE,  # Requires API key
+            CardSource.LLM,  # Requires API key
         ]
         
         cached_cards = []

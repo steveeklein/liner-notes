@@ -22,25 +22,46 @@ class MusicBrainzSource(DataSource):
         """Search for a recording in MusicBrainz."""
         try:
             async with httpx.AsyncClient() as client:
+                # Try exact match first
                 response = await client.get(
                     f"{self.BASE_URL}/recording",
                     params={
-                        "query": f'recording:"{title}" AND artist:"{artist}"',
+                        "query": f'recording:{title} AND artist:{artist}',
                         "fmt": "json",
-                        "limit": 1
+                        "limit": 5
                     },
                     headers=self.headers,
                     timeout=10.0
                 )
-                await asyncio.sleep(1)
+                await asyncio.sleep(1.1)  # MusicBrainz rate limit
                 
                 if response.status_code == 200:
                     data = response.json()
                     recordings = data.get("recordings", [])
                     if recordings:
                         return recordings[0]
+                
+                # Try broader search
+                response = await client.get(
+                    f"{self.BASE_URL}/recording",
+                    params={
+                        "query": f'{title} {artist}',
+                        "fmt": "json",
+                        "limit": 5
+                    },
+                    headers=self.headers,
+                    timeout=10.0
+                )
+                await asyncio.sleep(1.1)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    recordings = data.get("recordings", [])
+                    if recordings:
+                        return recordings[0]
+                        
         except Exception as e:
-            print(f"MusicBrainz search error: {e}")
+            print(f"MusicBrainz search error: {e}", flush=True)
         return None
     
     async def _get_artist_details(self, artist_id: str) -> dict | None:

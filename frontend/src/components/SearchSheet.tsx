@@ -53,13 +53,9 @@ export function SearchSheet({ isOpen, onClose, onTrackSelect }: SearchSheetProps
     }, 300);
   }, [handleSearch]);
 
-  const handleTrackClick = useCallback(async (track: Track) => {
-    try {
-      await playback.play(track.id);
-      onTrackSelect(track);
-    } catch (err) {
-      console.error('Play error:', err);
-    }
+  const handleTrackClick = useCallback((track: Track) => {
+    // Select track to show liner notes
+    onTrackSelect(track);
   }, [onTrackSelect]);
 
   if (!isOpen) return null;
@@ -175,9 +171,8 @@ export function SearchSheet({ isOpen, onClose, onTrackSelect }: SearchSheetProps
                     </p>
                   </div>
 
-                  <svg className="w-5 h-5 text-gray-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <svg className="w-5 h-5 text-indigo-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </button>
               ))}
