@@ -66,6 +66,17 @@ export const playback = {
 };
 
 export const cards = {
+  registerTrack: (track: Track) =>
+    fetchAPI<{ status: string }>('/cards/register', {
+      method: 'POST',
+      body: JSON.stringify({
+        track_id: track.id,
+        artist: track.artist,
+        title: track.title,
+        album: track.album || '',
+      }),
+    }),
+
   getCards: (trackId: string, source?: string) => {
     const params = source ? `?source=${source}` : '';
     return fetchAPI<InfoCard[]>(`/cards/${trackId}${params}`);
@@ -84,23 +95,33 @@ export const cards = {
   ) => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.host;
-    const ws = new WebSocket(`${wsProtocol}//${wsHost}/api/cards/ws/${trackId}`);
+    const wsUrl = `${wsProtocol}//${wsHost}/api/cards/ws/${trackId}`;
+    console.log(`[API] Opening WebSocket: ${wsUrl}`);
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => {
+      console.log(`[API] WebSocket connected for track: ${trackId}`);
+    };
+
+    ws.onclose = (event) => {
+      console.log(`[API] WebSocket closed for track: ${trackId}, code: ${event.code}`);
+    };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.error) {
-          console.error('Card WebSocket error:', data.error);
+          console.error('[API] Card WebSocket error:', data.error);
         } else {
           onCard(data as InfoCard);
         }
       } catch (e) {
-        console.error('Failed to parse card data:', e);
+        console.error('[API] Failed to parse card data:', e);
       }
     };
 
     ws.onerror = (event) => {
-      console.error('WebSocket error:', event);
+      console.error('[API] WebSocket error:', event);
       onError?.(event);
     };
 

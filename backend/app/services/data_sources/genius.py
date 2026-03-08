@@ -87,7 +87,7 @@ class GeniusSource(DataSource):
                     lyrics_preview = None
                     if lyrics_elem:
                         lyrics_text = lyrics_elem.get_text('\n', strip=True)
-                        lyrics_preview = lyrics_text[:300] + "..." if len(lyrics_text) > 300 else lyrics_text
+                        lyrics_preview = lyrics_text[:800] + "..." if len(lyrics_text) > 800 else lyrics_text
                     
                     return {
                         "about": about_text,
@@ -114,12 +114,13 @@ class GeniusSource(DataSource):
         details = await self._get_song_details(song["url"]) if song.get("url") else None
         
         if details and details.get("about"):
+            about_text = details["about"]
             cards.append(InfoCard(
                 id=str(uuid.uuid4()),
                 source=CardSource.GENIUS,
                 title=f"About '{track_title}'",
-                summary=details["about"][:400] + "..." if len(details["about"]) > 400 else details["about"],
-                full_content=details["about"],
+                summary=about_text[:800] + "..." if len(about_text) > 800 else about_text,
+                full_content=about_text if len(about_text) > 800 else None,
                 url=song["url"],
                 image_url=song.get("image_url"),
                 track_id=track_id,
@@ -127,11 +128,13 @@ class GeniusSource(DataSource):
             ))
         
         if details and details.get("lyrics_preview"):
+            lyrics = details["lyrics_preview"]
             cards.append(InfoCard(
                 id=str(uuid.uuid4()),
                 source=CardSource.GENIUS,
-                title=f"Lyrics: {track_title}",
-                summary=details["lyrics_preview"],
+                title=f"Lyrics Preview",
+                summary=lyrics[:600] if len(lyrics) > 600 else lyrics,
+                full_content=lyrics if len(lyrics) > 600 else None,
                 url=song["url"],
                 track_id=track_id,
                 category="lyrics"

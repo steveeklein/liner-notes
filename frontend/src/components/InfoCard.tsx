@@ -1,15 +1,18 @@
-import type { CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { InfoCard, CardSource } from '../types';
 
 interface InfoCardComponentProps {
   card: InfoCard;
-  onClick: () => void;
   onDismiss: () => void;
   style?: CSSProperties;
 }
 
-export function InfoCardComponent({ card, onClick, onDismiss, style }: InfoCardComponentProps) {
+export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentProps) {
   const sourceConfig = getSourceConfig(card.source);
+  const [isExpanded, setIsExpanded] = useState(false);
+  
+  const hasMoreContent = card.full_content && card.full_content.length > card.summary.length;
+  const displayContent = isExpanded && card.full_content ? card.full_content : card.summary;
 
   return (
     <div
@@ -27,10 +30,7 @@ export function InfoCardComponent({ card, onClick, onDismiss, style }: InfoCardC
       </button>
 
       {/* Card content */}
-      <button
-        onClick={onClick}
-        className="w-full text-left p-4 pr-12 haptic active:bg-[#2a2a2a] transition-colors"
-      >
+      <div className="p-4 pr-12">
         <div className="flex items-start gap-3">
           {card.image_url && (
             <img
@@ -47,25 +47,52 @@ export function InfoCardComponent({ card, onClick, onDismiss, style }: InfoCardC
               </span>
             </div>
             
-            <h4 className="font-medium text-white mb-1 line-clamp-2">
+            <h4 className="font-medium text-white mb-2">
               {card.title}
             </h4>
             
-            <p className="text-sm text-gray-400 line-clamp-3">
-              {card.summary}
+            <p className={`text-sm text-gray-300 leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-6'}`}>
+              {displayContent}
             </p>
             
-            {card.url && (
-              <div className="flex items-center gap-1 mt-2 text-xs text-indigo-400">
-                <span>Tap to learn more</span>
-                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            {/* Expand/Collapse button */}
+            {(hasMoreContent || card.summary.length > 200) && (
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="mt-2 text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
+              >
+                <span>{isExpanded ? 'Show less' : 'Read more'}</span>
+                <svg 
+                  className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                  fill="none" 
+                  viewBox="0 0 24 24" 
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-              </div>
+              </button>
             )}
           </div>
         </div>
-      </button>
+        
+        {/* Action buttons */}
+        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/10">
+          {card.url && (
+            <a
+              href={card.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 flex items-center justify-center gap-2 py-2 px-4 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              <span>View on {sourceConfig.label}</span>
+            </a>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

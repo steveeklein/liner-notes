@@ -26,8 +26,9 @@ class WikipediaSource(DataSource):
         
         artist_page = self.wiki.page(artist)
         if artist_page.exists():
-            summary = artist_page.summary[:500]
-            if len(artist_page.summary) > 500:
+            # Show more in summary for better preview
+            summary = artist_page.summary[:800]
+            if len(artist_page.summary) > 800:
                 summary += "..."
             
             cards.append(InfoCard(
@@ -35,7 +36,7 @@ class WikipediaSource(DataSource):
                 source=CardSource.WIKIPEDIA,
                 title=f"About {artist}",
                 summary=summary,
-                full_content=artist_page.text[:3000] if artist_page.text else None,
+                full_content=artist_page.text[:5000] if artist_page.text else None,
                 url=artist_page.fullurl,
                 track_id=track_id,
                 category="artist"
@@ -51,8 +52,8 @@ class WikipediaSource(DataSource):
             for search_term in album_searches:
                 album_page = self.wiki.page(search_term)
                 if album_page.exists() and "album" in album_page.text.lower()[:500]:
-                    summary = album_page.summary[:500]
-                    if len(album_page.summary) > 500:
+                    summary = album_page.summary[:800]
+                    if len(album_page.summary) > 800:
                         summary += "..."
                     
                     cards.append(InfoCard(
@@ -60,7 +61,7 @@ class WikipediaSource(DataSource):
                         source=CardSource.WIKIPEDIA,
                         title=f"About '{album}'",
                         summary=summary,
-                        full_content=album_page.text[:3000] if album_page.text else None,
+                        full_content=album_page.text[:5000] if album_page.text else None,
                         url=album_page.fullurl,
                         track_id=track_id,
                         category="album"
@@ -76,8 +77,8 @@ class WikipediaSource(DataSource):
         for search_term in song_searches:
             song_page = self.wiki.page(search_term)
             if song_page.exists() and "song" in song_page.text.lower()[:500]:
-                summary = song_page.summary[:500]
-                if len(song_page.summary) > 500:
+                summary = song_page.summary[:800]
+                if len(song_page.summary) > 800:
                     summary += "..."
                 
                 cards.append(InfoCard(
@@ -85,7 +86,7 @@ class WikipediaSource(DataSource):
                     source=CardSource.WIKIPEDIA,
                     title=f"About '{track_title}'",
                     summary=summary,
-                    full_content=song_page.text[:3000] if song_page.text else None,
+                    full_content=song_page.text[:5000] if song_page.text else None,
                     url=song_page.fullurl,
                     track_id=track_id,
                     category="song"

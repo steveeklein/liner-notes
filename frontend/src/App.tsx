@@ -3,7 +3,6 @@ import { LoginScreen } from './components/LoginScreen';
 import { NowPlaying } from './components/NowPlaying';
 import { MiniPlayer } from './components/MiniPlayer';
 import { SearchSheet } from './components/SearchSheet';
-import { CardDetail } from './components/CardDetail';
 import { auth, playback } from './api';
 import type { AuthStatus, Track, InfoCard } from './types';
 
@@ -13,7 +12,6 @@ function App() {
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [currentTrack, setCurrentTrack] = useState<Track | null>(null);
   const [cards, setCards] = useState<InfoCard[]>([]);
-  const [selectedCard, setSelectedCard] = useState<InfoCard | null>(null);
   const [activeScreen, setActiveScreen] = useState<Screen>('home');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,10 +38,11 @@ function App() {
         if (state.current_track && state.is_playing) {
           // New track detected
           if (state.current_track.id !== lastTrackIdRef.current) {
+            console.log(`[Poll] New track detected: ${state.current_track.title} by ${state.current_track.artist}`);
+            console.log(`[Poll] Track ID changed: ${lastTrackIdRef.current} -> ${state.current_track.id}`);
             lastTrackIdRef.current = state.current_track.id;
             setCurrentTrack(state.current_track);
-            setCards([]);
-            setSelectedCard(null);
+            setCards([]); // Clear cards for new track
             setActiveScreen('now-playing');
           }
           setIsListening(true);
@@ -77,7 +76,6 @@ function App() {
   const handleTrackSelect = useCallback((track: Track) => {
     setCurrentTrack(track);
     setCards([]);
-    setSelectedCard(null);
     setIsSearchOpen(false);
     setActiveScreen('now-playing');
   }, []);
@@ -95,10 +93,7 @@ function App() {
 
   const handleDismissCard = useCallback((cardId: string) => {
     setCards((prev) => prev.filter((c) => c.id !== cardId));
-    if (selectedCard?.id === cardId) {
-      setSelectedCard(null);
-    }
-  }, [selectedCard]);
+  }, []);
 
   if (isLoading) {
     return (
@@ -146,7 +141,6 @@ function App() {
             track={currentTrack}
             cards={cards}
             onNewCard={handleNewCard}
-            onCardSelect={setSelectedCard}
             onDismissCard={handleDismissCard}
             onBack={() => setActiveScreen('home')}
           />
@@ -275,14 +269,6 @@ function App() {
         onClose={() => setIsSearchOpen(false)}
         onTrackSelect={handleTrackSelect}
       />
-
-      {/* Card Detail Modal */}
-      {selectedCard && (
-        <CardDetail
-          card={selectedCard}
-          onClose={() => setSelectedCard(null)}
-        />
-      )}
 
       {/* Bottom safe area */}
       <div className="h-[var(--sab)] bg-[#0f0f0f] flex-shrink-0" />
