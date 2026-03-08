@@ -51,9 +51,18 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
               {card.title}
             </h4>
             
-            <p className={`text-sm text-gray-300 leading-relaxed whitespace-pre-wrap ${isExpanded ? '' : 'line-clamp-6'}`}>
-              {displayContent}
-            </p>
+            <div className={`text-sm text-gray-300 leading-relaxed ${isExpanded ? '' : 'line-clamp-6'}`}>
+              {displayContent.split('\n\n').map((paragraph, i) => (
+                <p key={i} className={i > 0 ? 'mt-3' : ''}>
+                  {paragraph.split('\n').map((line, j) => (
+                    <span key={j}>
+                      {line}
+                      {j < paragraph.split('\n').length - 1 && <br />}
+                    </span>
+                  ))}
+                </p>
+              ))}
+            </div>
             
             {/* Expand/Collapse button */}
             {(hasMoreContent || card.summary.length > 200) && (

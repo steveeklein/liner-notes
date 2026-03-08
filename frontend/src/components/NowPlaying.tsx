@@ -73,12 +73,26 @@ export function NowPlaying({
     };
   }, [track.id, track, onNewCard]);
 
-  const categorizedCards = cards.reduce((acc, card) => {
+  // Separate Wikipedia cards (featured at top) from other cards
+  const wikipediaCards = cards.filter(c => c.source === 'wikipedia');
+  const otherCards = cards.filter(c => c.source !== 'wikipedia');
+
+  const categorizedCards = otherCards.reduce((acc, card) => {
     const cat = card.category;
     if (!acc[cat]) acc[cat] = [];
     acc[cat].push(card);
     return acc;
   }, {} as Record<string, InfoCard[]>);
+
+  // Sort cards within each category: prioritize by source reliability
+  const sourceOrder = ['genius', 'musicbrainz', 'discogs', 'lastfm', 'allmusic', 'llm'];
+  Object.keys(categorizedCards).forEach(cat => {
+    categorizedCards[cat].sort((a, b) => {
+      const aIdx = sourceOrder.indexOf(a.source);
+      const bIdx = sourceOrder.indexOf(b.source);
+      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+    });
+  });
 
   const categoryOrder = [
     'song', 'lyrics', 'artist', 'album', 'credits', 
@@ -100,18 +114,36 @@ export function NowPlaying({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
+          {/* Wikipedia cards pinned at top */}
+          {wikipediaCards.length > 0 && (
+            <div>
+              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                Overview
+              </h3>
+              <div className="flex flex-col gap-3">
+                {wikipediaCards.map((card) => (
+                  <InfoCardComponent
+                    key={card.id}
+                    card={card}
+                    onDismiss={() => onDismissCard(card.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          
+          {/* Other cards by category */}
           {sortedCategories.map(category => (
             <div key={category}>
               <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
                 {formatCategory(category)}
               </h3>
               <div className="flex flex-col gap-3">
-                {categorizedCards[category].map((card, index) => (
+                {categorizedCards[category].map((card) => (
                   <InfoCardComponent
                     key={card.id}
                     card={card}
                     onDismiss={() => onDismissCard(card.id)}
-                    style={{ animationDelay: `${index * 50}ms` }}
                   />
                 ))}
               </div>
@@ -124,84 +156,82 @@ export function NowPlaying({
 
   return (
     <div className="h-full overflow-auto bg-[#0f0f0f]">
+      {/* Critical CSS for immediate layout */}
+      <style>{`
+        .np-mobile { display: block; }
+        .np-desktop { display: none; }
+        @media (min-width: 1024px) {
+          .np-mobile { display: none !important; }
+          .np-desktop { display: flex !important; }
+        }
+      `}</style>
+      
       {/* Back button - always visible */}
       <button
         onClick={onBack}
-        className="fixed top-2 left-2 z-10 w-9 h-9 flex items-center justify-center rounded-full bg-black/50 border-none text-white cursor-pointer hover:bg-black/70 transition-colors"
+        style={{ position: 'fixed', top: 8, left: 8, zIndex: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', cursor: 'pointer' }}
       >
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
         </svg>
       </button>
 
       {/* Mobile layout: stacked */}
-      <div className="lg:hidden">
-        {/* Album section - centered */}
-        <div className="h-[65vh] min-h-[450px] flex flex-col items-center justify-center p-4 gap-4">
-          {/* Album art */}
+      <div className="np-mobile">
+        <div style={{ height: '50vh', minHeight: 320, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 16, gap: 16 }}>
           {track.cover_url ? (
             <img
               src={track.cover_url}
               alt={track.album || ''}
-              className="w-[min(calc(65vh-100px),90vw)] h-[min(calc(65vh-100px),90vw)] min-w-[363px] min-h-[363px] max-w-[640px] max-h-[640px] rounded-xl object-cover shadow-2xl"
+              style={{ width: 280, height: 280, maxWidth: '85vw', maxHeight: '85vw', borderRadius: 12, objectFit: 'cover', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}
             />
           ) : (
-            <div className="w-[min(calc(65vh-100px),90vw)] h-[min(calc(65vh-100px),90vw)] min-w-[363px] min-h-[363px] max-w-[640px] max-h-[640px] rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center">
-              <svg className="w-16 h-16 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div style={{ width: 280, height: 280, maxWidth: '85vw', maxHeight: '85vw', borderRadius: 12, background: 'linear-gradient(135deg, #1a1a1a, #252525)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg style={{ width: 64, height: 64, color: '#666' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
             </div>
           )}
-          
-          {/* Track info */}
-          <div className="text-center">
-            <h1 className="m-0 text-[22px] font-bold text-white leading-tight">{track.title}</h1>
-            <p className="mt-1.5 text-[17px] text-gray-400">{track.artist}</p>
-            {track.album && <p className="mt-1 text-sm text-gray-500">{track.album}</p>}
+          <div style={{ textAlign: 'center' }}>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{track.title}</h1>
+            <p style={{ margin: '6px 0 0 0', fontSize: 17, color: '#9ca3af' }}>{track.artist}</p>
+            {track.album && <p style={{ margin: '4px 0 0 0', fontSize: 14, color: '#6b7280' }}>{track.album}</p>}
             {cards.length > 0 && (
-              <p className="mt-2.5 text-[13px] text-indigo-500 font-medium">{cards.length} liner notes</p>
+              <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#6366f1', fontWeight: 500 }}>{cards.length} liner notes</p>
             )}
           </div>
         </div>
-
-        {/* Cards section */}
-        <div className="bg-[#1a1a1a] p-4 pb-8">
+        <div style={{ background: '#1a1a1a', padding: '16px 16px 32px 16px' }}>
           {cardsContent}
         </div>
       </div>
 
       {/* Desktop layout: side by side */}
-      <div className="hidden lg:flex min-h-full">
-        {/* Left sidebar - Album */}
-        <div className="w-[680px] xl:w-[780px] shrink-0 sticky top-0 h-screen flex flex-col items-center justify-center p-8 gap-5 bg-[#0f0f0f]">
-          {/* Album art */}
+      <div className="np-desktop" style={{ minHeight: '100%' }}>
+        <div style={{ width: 680, flexShrink: 0, position: 'sticky', top: 0, height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 32, gap: 20, background: '#0f0f0f' }}>
           {track.cover_url ? (
             <img
               src={track.cover_url}
               alt={track.album || ''}
-              className="w-[580px] xl:w-[654px] h-[580px] xl:h-[654px] rounded-xl object-cover shadow-2xl"
+              style={{ width: 580, height: 580, borderRadius: 12, objectFit: 'cover', boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}
             />
           ) : (
-            <div className="w-[580px] xl:w-[654px] h-[580px] xl:h-[654px] rounded-xl bg-gradient-to-br from-[#1a1a1a] to-[#252525] flex items-center justify-center">
-              <svg className="w-20 h-20 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div style={{ width: 580, height: 580, borderRadius: 12, background: 'linear-gradient(135deg, #1a1a1a, #252525)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg style={{ width: 80, height: 80, color: '#666' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
               </svg>
             </div>
           )}
-          
-          {/* Track info */}
-          <div className="text-center">
-            <h1 className="m-0 text-2xl font-bold text-white leading-tight">{track.title}</h1>
-            <p className="mt-2 text-lg text-gray-400">{track.artist}</p>
-            {track.album && <p className="mt-1 text-base text-gray-500">{track.album}</p>}
+          <div style={{ textAlign: 'center' }}>
+            <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{track.title}</h1>
+            <p style={{ margin: '8px 0 0 0', fontSize: 18, color: '#9ca3af' }}>{track.artist}</p>
+            {track.album && <p style={{ margin: '4px 0 0 0', fontSize: 16, color: '#6b7280' }}>{track.album}</p>}
             {cards.length > 0 && (
-              <p className="mt-3 text-sm text-indigo-500 font-medium">{cards.length} liner notes</p>
+              <p style={{ margin: '12px 0 0 0', fontSize: 14, color: '#6366f1', fontWeight: 500 }}>{cards.length} liner notes</p>
             )}
           </div>
         </div>
-
-        {/* Right content - Cards */}
-        <div className="flex-1 bg-[#1a1a1a] p-6 pb-12">
+        <div style={{ flex: 1, background: '#1a1a1a', padding: '24px 24px 48px 24px' }}>
           {cardsContent}
         </div>
       </div>

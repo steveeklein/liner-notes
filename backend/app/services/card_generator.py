@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 
 from app.models import InfoCard, CardSource, Track
+from app.services.content_enhancer import content_enhancer
 from app.services.data_sources import (
     WikipediaSource,
     AllMusicSource,
@@ -76,6 +77,31 @@ class CardGenerator:
             "album": album
         }
     
+    def _is_useful_card(self, card: InfoCard) -> bool:
+        """
+        Check if a card has useful content vs placeholder text.
+        Returns False for cards that just say "go to X to see more".
+        """
+        summary_lower = card.summary.lower()
+        
+        placeholder_patterns = [
+            "explore", "view on", "check out", "discover more",
+            "full discography on", "see more on", "find more at",
+            "learn more about", "visit", "click to see",
+            "browse the full", "for more information"
+        ]
+        
+        for pattern in placeholder_patterns:
+            if pattern in summary_lower and len(card.summary) < 100:
+                print(f"[Cards] Filtering out placeholder card: {card.title}", flush=True)
+                return False
+        
+        if len(card.summary.strip()) < 30:
+            print(f"[Cards] Filtering out short card: {card.title}", flush=True)
+            return False
+        
+        return True
+    
     async def generate_cards_stream(self, track_id: str) -> AsyncGenerator[InfoCard, None]:
         """
         Stream cards as they're generated from various sources.
@@ -105,6 +131,21 @@ class CardGenerator:
                     track_id=track_id
                 )
                 print(f"[Cards] {source_type.value} returned {len(cards)} cards", flush=True)
+                
+                if cards:
+                    # Filter out placeholder cards
+                    cards = [c for c in cards if self._is_useful_card(c)]
+                    
+                    # Enhance cards with LLM (except LLM-generated ones)
+                    if cards and source_type != CardSource.LLM:
+                        for i, card in enumerate(cards):
+                            if len(card.summary) >= 150:
+                                try:
+                                    cards[i] = await content_enhancer.enhance_card(card)
+                                    print(f"[Cards] Enhanced card from {source_type.value}", flush=True)
+                                except Exception as e:
+                                    print(f"[Cards] Enhancement failed: {e}", flush=True)
+                
                 return cards
             except Exception as e:
                 print(f"[Cards] Error from {source_type.value}: {e}", flush=True)

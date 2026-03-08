@@ -172,3 +172,12 @@ body {
 .source-allmusic { background: #004b91; color: #fff; }
 .source-llm { background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; }
 .source-web { background: #4285f4; color: #fff; }
+
+/* Critical responsive styles - ensures correct layout before Tailwind loads */
+@media (min-width: 1024px) {
+  .lg\:hidden { display: none !important; }
+  .hidden.lg\:flex { display: flex !important; }
+}
+@media (max-width: 1023px) {
+  .hidden.lg\:flex { display: none !important; }
+}

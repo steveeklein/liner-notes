@@ -80,6 +80,40 @@ class DiscogsSource(DataSource):
             print(f"Discogs release details error: {e}", flush=True)
         return None
     
+    async def _get_artist_details(self, artist_id: int) -> dict | None:
+        """Get detailed artist info including profile and releases."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.BASE_URL}/artists/{artist_id}",
+                    headers=self.headers,
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+        except Exception as e:
+            print(f"Discogs artist details error: {e}", flush=True)
+        return None
+    
+    async def _get_artist_releases(self, artist_id: int) -> list | None:
+        """Get artist's releases/albums."""
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.BASE_URL}/artists/{artist_id}/releases",
+                    params={"sort": "year", "sort_order": "desc", "per_page": 10},
+                    headers=self.headers,
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    return data.get("releases", [])
+        except Exception as e:
+            print(f"Discogs artist releases error: {e}", flush=True)
+        return None
+    
     async def fetch(
         self,
         artist: str,
@@ -144,19 +178,64 @@ class DiscogsSource(DataSource):
         
         # Search for artist info  
         artist_result = await self._search_artist(artist)
-        if artist_result:
-            artist_url = f"https://www.discogs.com/artist/{artist_result.get('id', '')}"
+        if artist_result and artist_result.get("id"):
+            artist_id = artist_result["id"]
+            artist_url = f"https://www.discogs.com/artist/{artist_id}"
             
-            # If we have artist info
-            if artist_result.get("title"):
-                cards.append(InfoCard(
-                    id=str(uuid.uuid4()),
-                    source=CardSource.DISCOGS,
-                    title=f"Discography",
-                    summary=f"Explore {artist}'s full discography on Discogs",
-                    url=artist_url,
-                    track_id=track_id,
-                    category="artist"
-                ))
+            # Get actual artist details
+            artist_details = await self._get_artist_details(artist_id)
+            
+            if artist_details:
+                profile = artist_details.get("profile", "")
+                
+                # Only create card if we have actual profile content
+                if profile and len(profile) > 50:
+                    # Clean up profile text
+                    profile_clean = profile.replace("[a=", "").replace("[l=", "")
+                    profile_clean = profile_clean.replace("]", "").replace("[", "")
+                    
+                    summary = profile_clean[:400]
+                    if len(profile_clean) > 400:
+                        summary += "..."
+                    
+                    cards.append(InfoCard(
+                        id=str(uuid.uuid4()),
+                        source=CardSource.DISCOGS,
+                        title=f"About {artist}",
+                        summary=summary,
+                        full_content=profile_clean if len(profile_clean) > 400 else None,
+                        url=artist_url,
+                        track_id=track_id,
+                        category="artist"
+                    ))
+            
+            # Get artist's top releases
+            releases = await self._get_artist_releases(artist_id)
+            
+            if releases:
+                # Filter to main releases (albums)
+                albums = [r for r in releases if r.get("type") == "master" or r.get("role") == "Main"][:6]
+                
+                if albums:
+                    album_list = []
+                    for alb in albums:
+                        title = alb.get("title", "")
+                        year = alb.get("year")
+                        if title:
+                            if year:
+                                album_list.append(f"{title} ({year})")
+                            else:
+                                album_list.append(title)
+                    
+                    if album_list:
+                        cards.append(InfoCard(
+                            id=str(uuid.uuid4()),
+                            source=CardSource.DISCOGS,
+                            title="Discography Highlights",
+                            summary="Notable releases:\n\n" + "\n".join(f"• {a}" for a in album_list),
+                            url=artist_url,
+                            track_id=track_id,
+                            category="artist"
+                        ))
         
         return cards

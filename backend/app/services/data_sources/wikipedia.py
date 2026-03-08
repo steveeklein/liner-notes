@@ -1,5 +1,8 @@
-from typing import List
+from typing import List, Optional
 import uuid
+import os
+import json
+import httpx
 import wikipediaapi
 
 from app.models import InfoCard, CardSource
@@ -14,6 +17,140 @@ class WikipediaSource(DataSource):
             user_agent='LinerNotes/1.0 (contact@example.com)',
             language='en'
         )
+        self.groq_api_key = os.getenv("GROQ_API_KEY")
+    
+    def _is_disambiguation(self, text: str) -> bool:
+        """Check if a page is a disambiguation page."""
+        lower = text.lower()[:1000]
+        indicators = [
+            "may refer to",
+            "can refer to", 
+            "refers to multiple",
+            "disambiguation",
+            "may also refer to",
+            "commonly refers to"
+        ]
+        return any(ind in lower for ind in indicators)
+    
+    async def _resolve_disambiguation(self, page_text: str, artist: str, album: str, track: str) -> Optional[str]:
+        """Use LLM to pick the correct Wikipedia page from disambiguation options."""
+        if not self.groq_api_key:
+            return None
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {self.groq_api_key}",
+                        "Content-Type": "application/json"
+                    },
+                    json={
+                        "model": "llama-3.1-8b-instant",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": """You help resolve Wikipedia disambiguation. Given disambiguation text and context about a song/artist/album, return the exact Wikipedia page title that best matches.
+
+Return JSON: {"page_title": "Exact Page Title Here"} or {"page_title": null} if no match."""
+                            },
+                            {
+                                "role": "user",
+                                "content": f"""Context: Looking for info about the song "{track}" by {artist} from album "{album}".
+
+Disambiguation text:
+{page_text[:1500]}
+
+Which Wikipedia page title matches this context best?"""
+                            }
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "max_tokens": 100,
+                        "temperature": 0.1
+                    },
+                    timeout=10.0
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    if content:
+                        parsed = json.loads(content)
+                        return parsed.get("page_title")
+        except Exception as e:
+            print(f"[Wikipedia] Disambiguation resolution error: {e}", flush=True)
+        
+        return None
+    
+    async def _get_page_with_disambiguation(self, search_terms: List[str], artist: str, album: str, track: str, content_check: str = None) -> Optional[tuple]:
+        """Try search terms, handling disambiguation pages."""
+        for search_term in search_terms:
+            page = self.wiki.page(search_term)
+            if not page.exists():
+                continue
+            
+            # Check if it's a disambiguation page
+            if self._is_disambiguation(page.text):
+                print(f"[Wikipedia] Found disambiguation for '{search_term}', resolving...", flush=True)
+                resolved_title = await self._resolve_disambiguation(page.text, artist, album, track)
+                if resolved_title:
+                    resolved_page = self.wiki.page(resolved_title)
+                    if resolved_page.exists():
+                        print(f"[Wikipedia] Resolved to: {resolved_title}", flush=True)
+                        return (resolved_page, resolved_title)
+                continue
+            
+            # Check content requirements if specified
+            if content_check and content_check not in page.text.lower()[:500]:
+                continue
+            
+            return (page, search_term)
+        
+        return None
+    
+    def _format_summary(self, text: str, max_length: int = 500) -> str:
+        """Format summary text to be more readable with front-loaded info."""
+        if not text:
+            return ""
+        
+        sentences = text.replace('\n', ' ').split('. ')
+        
+        formatted = []
+        current_length = 0
+        
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+            if not sentence.endswith('.'):
+                sentence += '.'
+            
+            if current_length + len(sentence) > max_length:
+                break
+            
+            formatted.append(sentence)
+            current_length += len(sentence) + 1
+        
+        result = ' '.join(formatted)
+        if len(text) > len(result):
+            result = result.rstrip('.') + '...'
+        
+        return result
+    
+    def _format_full_content(self, text: str) -> str:
+        """Format full content with proper paragraph breaks."""
+        if not text:
+            return ""
+        
+        paragraphs = text.split('\n\n')
+        formatted_paragraphs = []
+        
+        for para in paragraphs:
+            para = para.strip()
+            if para and len(para) > 50:
+                formatted_paragraphs.append(para)
+        
+        return '\n\n'.join(formatted_paragraphs[:10])
     
     async def fetch(
         self,
@@ -24,73 +161,78 @@ class WikipediaSource(DataSource):
     ) -> List[InfoCard]:
         cards = []
         
-        artist_page = self.wiki.page(artist)
-        if artist_page.exists():
-            # Show more in summary for better preview
-            summary = artist_page.summary[:800]
-            if len(artist_page.summary) > 800:
-                summary += "..."
+        # Artist page
+        artist_result = await self._get_page_with_disambiguation(
+            [artist, f"{artist} (musician)", f"{artist} (band)"],
+            artist, album, track_title
+        )
+        if artist_result:
+            artist_page, _ = artist_result
+            summary = self._format_summary(artist_page.summary, max_length=500)
+            full_content = self._format_full_content(artist_page.text[:5000]) if artist_page.text else None
             
             cards.append(InfoCard(
                 id=str(uuid.uuid4()),
                 source=CardSource.WIKIPEDIA,
                 title=f"About {artist}",
                 summary=summary,
-                full_content=artist_page.text[:5000] if artist_page.text else None,
+                full_content=full_content,
                 url=artist_page.fullurl,
                 track_id=track_id,
                 category="artist"
             ))
         
+        # Album page
         if album:
             album_searches = [
-                f"{album} (album)",
                 f"{album} ({artist} album)",
+                f"{album} (album)",
                 album
             ]
             
-            for search_term in album_searches:
-                album_page = self.wiki.page(search_term)
-                if album_page.exists() and "album" in album_page.text.lower()[:500]:
-                    summary = album_page.summary[:800]
-                    if len(album_page.summary) > 800:
-                        summary += "..."
-                    
-                    cards.append(InfoCard(
-                        id=str(uuid.uuid4()),
-                        source=CardSource.WIKIPEDIA,
-                        title=f"About '{album}'",
-                        summary=summary,
-                        full_content=album_page.text[:5000] if album_page.text else None,
-                        url=album_page.fullurl,
-                        track_id=track_id,
-                        category="album"
-                    ))
-                    break
+            album_result = await self._get_page_with_disambiguation(
+                album_searches, artist, album, track_title, content_check="album"
+            )
+            if album_result:
+                album_page, _ = album_result
+                summary = self._format_summary(album_page.summary, max_length=500)
+                full_content = self._format_full_content(album_page.text[:5000]) if album_page.text else None
+                
+                cards.append(InfoCard(
+                    id=str(uuid.uuid4()),
+                    source=CardSource.WIKIPEDIA,
+                    title=f"About '{album}'",
+                    summary=summary,
+                    full_content=full_content,
+                    url=album_page.fullurl,
+                    track_id=track_id,
+                    category="album"
+                ))
         
+        # Song page
         song_searches = [
             f"{track_title} ({artist} song)",
             f"{track_title} (song)",
             track_title
         ]
         
-        for search_term in song_searches:
-            song_page = self.wiki.page(search_term)
-            if song_page.exists() and "song" in song_page.text.lower()[:500]:
-                summary = song_page.summary[:800]
-                if len(song_page.summary) > 800:
-                    summary += "..."
-                
-                cards.append(InfoCard(
-                    id=str(uuid.uuid4()),
-                    source=CardSource.WIKIPEDIA,
-                    title=f"About '{track_title}'",
-                    summary=summary,
-                    full_content=song_page.text[:5000] if song_page.text else None,
-                    url=song_page.fullurl,
-                    track_id=track_id,
-                    category="song"
-                ))
-                break
+        song_result = await self._get_page_with_disambiguation(
+            song_searches, artist, album, track_title, content_check="song"
+        )
+        if song_result:
+            song_page, _ = song_result
+            summary = self._format_summary(song_page.summary, max_length=500)
+            full_content = self._format_full_content(song_page.text[:5000]) if song_page.text else None
+            
+            cards.append(InfoCard(
+                id=str(uuid.uuid4()),
+                source=CardSource.WIKIPEDIA,
+                title=f"About '{track_title}'",
+                summary=summary,
+                full_content=full_content,
+                url=song_page.fullurl,
+                track_id=track_id,
+                category="song"
+            ))
         
         return cards

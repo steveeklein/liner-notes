@@ -2,18 +2,19 @@ from typing import List
 import uuid
 import os
 import json
-from openai import AsyncOpenAI
+import httpx
 
 from app.models import InfoCard, CardSource
 from .base import DataSource
 
 
 class LLMSource(DataSource):
-    """Generates contextual information using LLM."""
+    """Generates contextual information using Groq (free tier with Llama 3.1)."""
     
     def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
-        self.client = AsyncOpenAI(api_key=api_key) if api_key else None
+        self.api_key = os.getenv("GROQ_API_KEY")
+        self.base_url = "https://api.groq.com/openai/v1/chat/completions"
+        self.model = "llama-3.1-8b-instant"
     
     async def fetch(
         self,
@@ -22,56 +23,103 @@ class LLMSource(DataSource):
         album: str,
         track_id: str
     ) -> List[InfoCard]:
-        if not self.client:
+        if not self.api_key:
+            print("[LLM] No GROQ_API_KEY set, skipping", flush=True)
             return []
+        
+        print(f"[LLM] Calling Groq API for: {track_title} by {artist}", flush=True)
         
         cards = []
         
         try:
-            response = await self.client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are a music expert providing interesting context about songs and artists.
-                        Return JSON with the following structure:
-                        {
-                            "insights": [
-                                {
-                                    "title": "Brief title",
-                                    "content": "2-3 sentence insight",
-                                    "category": "artist|song|album|trivia"
-                                }
-                            ]
-                        }
-                        Provide 2-3 unique, interesting insights about the song, artist, or album."""
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    self.base_url,
+                    headers={
+                        "Authorization": f"Bearer {self.api_key}",
+                        "Content-Type": "application/json"
                     },
-                    {
-                        "role": "user",
-                        "content": f"Provide interesting insights about '{track_title}' by {artist}"
-                        + (f" from the album '{album}'" if album else "")
-                    }
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=500,
-                temperature=0.7
-            )
-            
-            content = response.choices[0].message.content
-            if content:
-                data = json.loads(content)
+                    json={
+                        "model": self.model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": """You are a music expert. Return JSON with exactly 3 insights:
+{
+  "artist_insight": {"title": "3-5 words about artist", "content": "1-2 paragraphs with specific facts about the artist"},
+  "album_insight": {"title": "3-5 words about album", "content": "1-2 paragraphs with specific facts about this album"},
+  "track_insight": {"title": "3-5 words about track", "content": "1-2 paragraphs with specific facts about this specific song"}
+}
+
+Rules:
+- Be SPECIFIC: mention dates, chart positions, collaborators, behind-the-scenes stories
+- Lead each insight with the most surprising/interesting fact
+- Keep each insight focused on its category (artist/album/track)
+- If album is unknown, make album_insight about the artist's discography instead"""
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Give me insights about the song '{track_title}' by {artist}" + (f" from the album '{album}'" if album else "")
+                            }
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "max_tokens": 800,
+                        "temperature": 0.7
+                    },
+                    timeout=15.0
+                )
                 
-                for insight in data.get("insights", []):
-                    cards.append(InfoCard(
-                        id=str(uuid.uuid4()),
-                        source=CardSource.LLM,
-                        title=insight.get("title", "Music Insight"),
-                        summary=insight.get("content", ""),
-                        track_id=track_id,
-                        category=insight.get("category", "trivia")
-                    ))
+                print(f"[LLM] Groq response status: {response.status_code}", flush=True)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+                    print(f"[LLM] Got content: {content[:200] if content else 'None'}...", flush=True)
+                    
+                    if content:
+                        parsed = json.loads(content)
+                        
+                        # Artist insight
+                        if parsed.get("artist_insight"):
+                            ai = parsed["artist_insight"]
+                            cards.append(InfoCard(
+                                id=str(uuid.uuid4()),
+                                source=CardSource.LLM,
+                                title=ai.get("title", f"About {artist}"),
+                                summary=ai.get("content", ""),
+                                track_id=track_id,
+                                category="artist"
+                            ))
+                        
+                        # Album insight
+                        if parsed.get("album_insight"):
+                            ai = parsed["album_insight"]
+                            cards.append(InfoCard(
+                                id=str(uuid.uuid4()),
+                                source=CardSource.LLM,
+                                title=ai.get("title", f"About {album}"),
+                                summary=ai.get("content", ""),
+                                track_id=track_id,
+                                category="album"
+                            ))
+                        
+                        # Track insight
+                        if parsed.get("track_insight"):
+                            ti = parsed["track_insight"]
+                            cards.append(InfoCard(
+                                id=str(uuid.uuid4()),
+                                source=CardSource.LLM,
+                                title=ti.get("title", f"About {track_title}"),
+                                summary=ti.get("content", ""),
+                                track_id=track_id,
+                                category="song"
+                            ))
+                        
+                        print(f"[LLM] Created {len(cards)} cards", flush=True)
+                else:
+                    print(f"[LLM] Groq API error: {response.status_code} - {response.text}", flush=True)
         
         except Exception as e:
-            print(f"LLM error: {e}")
+            print(f"LLM error: {e}", flush=True)
         
         return cards

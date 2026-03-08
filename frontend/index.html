@@ -36,6 +36,20 @@
         --sab: env(safe-area-inset-bottom);
         --sal: env(safe-area-inset-left);
       }
+      
+      /* Critical: Prevent images from ever exceeding viewport */
+      img {
+        max-width: 100%;
+        max-height: 100vh;
+      }
+      
+      /* NowPlaying responsive layouts - applied before React hydrates */
+      .np-mobile { display: block; }
+      .np-desktop { display: none; }
+      @media (min-width: 1024px) {
+        .np-mobile { display: none !important; }
+        .np-desktop { display: flex !important; }
+      }
     </style>
   </head>
   <body>

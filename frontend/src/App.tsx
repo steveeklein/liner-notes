@@ -82,7 +82,15 @@ function App() {
 
   const handleNewCard = useCallback((card: InfoCard) => {
     setCards((prev) => {
-      // Deduplicate by source + title to avoid duplicates from reconnections
+      // For LLM cards, only allow one per category (artist, album, song)
+      if (card.source === 'llm') {
+        const existsLLM = prev.some(
+          (c) => c.source === 'llm' && c.category === card.category
+        );
+        if (existsLLM) return prev;
+      }
+      
+      // For other sources, deduplicate by source + title
       const exists = prev.some(
         (c) => c.source === card.source && c.title === card.title
       );

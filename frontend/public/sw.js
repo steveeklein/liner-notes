@@ -1,4 +1,4 @@
-const CACHE_NAME = 'liner-notes-v1';
+const CACHE_NAME = 'liner-notes-v2';
 const urlsToCache = [
   '/',
   '/index.html',

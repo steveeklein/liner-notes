@@ -183,6 +183,7 @@ class SpotifyProvider(MusicProviderInterface):
     
     BASE_URL = "https://api.spotify.com/v1"
     AUTH_URL = "https://accounts.spotify.com/api/token"
+    TOKEN_FILE = ".spotify_tokens.json"
     
     def __init__(self):
         self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
@@ -192,6 +193,35 @@ class SpotifyProvider(MusicProviderInterface):
         self.current_track: Optional[Track] = None
         self.is_playing = False
         self.user_name: Optional[str] = None
+        self._load_tokens()
+    
+    def _load_tokens(self):
+        """Load tokens from file on startup."""
+        import json
+        try:
+            if os.path.exists(self.TOKEN_FILE):
+                with open(self.TOKEN_FILE, 'r') as f:
+                    data = json.load(f)
+                    self.access_token = data.get("access_token")
+                    self.refresh_token = data.get("refresh_token")
+                    self.user_name = data.get("user_name")
+                    print(f"[Spotify] Loaded tokens from file, user: {self.user_name}", flush=True)
+        except Exception as e:
+            print(f"[Spotify] Failed to load tokens: {e}", flush=True)
+    
+    def _save_tokens(self):
+        """Save tokens to file for persistence."""
+        import json
+        try:
+            with open(self.TOKEN_FILE, 'w') as f:
+                json.dump({
+                    "access_token": self.access_token,
+                    "refresh_token": self.refresh_token,
+                    "user_name": self.user_name
+                }, f)
+            print(f"[Spotify] Saved tokens to file", flush=True)
+        except Exception as e:
+            print(f"[Spotify] Failed to save tokens: {e}", flush=True)
     
     def get_auth_url(self, redirect_uri: str) -> str:
         """Generate Spotify OAuth authorization URL."""
@@ -252,6 +282,7 @@ class SpotifyProvider(MusicProviderInterface):
                     if user_info:
                         self.user_name = user_info.get("display_name") or user_info.get("id")
                     
+                    self._save_tokens()
                     return True
                     
                 print(f"[Spotify] Token exchange failed: {response.text}", flush=True)
@@ -289,9 +320,11 @@ class SpotifyProvider(MusicProviderInterface):
                     self.access_token = data.get("access_token")
                     if data.get("refresh_token"):
                         self.refresh_token = data.get("refresh_token")
+                    self._save_tokens()
+                    print("[Spotify] Token refreshed successfully", flush=True)
                     return True
         except Exception as e:
-            print(f"Spotify refresh error: {e}")
+            print(f"[Spotify] Refresh error: {e}", flush=True)
         
         return False
     
@@ -358,6 +391,9 @@ class SpotifyProvider(MusicProviderInterface):
         self.current_track = None
         self.is_playing = False
         self.user_name = None
+        if os.path.exists(self.TOKEN_FILE):
+            os.remove(self.TOKEN_FILE)
+            print("[Spotify] Removed token file", flush=True)
     
     async def get_playback_state(self) -> PlaybackState:
         """Get current playback state from Spotify."""

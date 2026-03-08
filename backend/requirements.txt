@@ -19,8 +19,7 @@ beautifulsoup4==4.12.3
 wikipedia-api==0.6.0
 lxml==5.1.0
 
-# LLM integration
-openai==1.12.0
+# LLM integration (using Groq via httpx - no SDK needed)
 
 # Optional: async improvements
 aiofiles==23.2.1

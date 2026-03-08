@@ -1,6 +1,7 @@
 from typing import List
 import uuid
 import os
+import re
 import httpx
 from bs4 import BeautifulSoup
 
@@ -38,6 +39,7 @@ class GeniusSource(DataSource):
                         if hits:
                             result = hits[0].get("result", {})
                             return {
+                                "id": result.get("id"),
                                 "title": result.get("title"),
                                 "artist": result.get("primary_artist", {}).get("name"),
                                 "url": result.get("url"),
@@ -61,6 +63,7 @@ class GeniusSource(DataSource):
                             if hits:
                                 result = hits[0].get("result", {})
                                 return {
+                                    "id": result.get("id"),
                                     "title": result.get("title"),
                                     "artist": result.get("primary_artist", {}).get("name"),
                                     "url": result.get("url"),
@@ -97,6 +100,65 @@ class GeniusSource(DataSource):
             print(f"Genius scrape error: {e}")
         
         return None
+    
+    async def _get_annotations(self, song_id: int, url: str) -> List[dict]:
+        """Fetch actual annotation content from Genius."""
+        annotations = []
+        
+        try:
+            referents_url = f"https://genius.com/api/referents?song_id={song_id}&per_page=10&text_format=plain"
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                response = await client.get(referents_url, headers=self.headers, timeout=10.0)
+                if response.status_code == 200:
+                    data = response.json()
+                    referents = data.get("response", {}).get("referents", [])
+                    
+                    for ref in referents[:8]:
+                        fragment = ref.get("fragment", "")
+                        annotation_list = ref.get("annotations", [])
+                        
+                        if annotation_list:
+                            annotation = annotation_list[0]
+                            body = annotation.get("body", {})
+                            
+                            if isinstance(body, dict):
+                                annotation_text = body.get("plain", "")
+                            else:
+                                annotation_text = str(body) if body else ""
+                            
+                            if annotation_text and len(annotation_text) > 20:
+                                fragment_clean = fragment.strip()[:100]
+                                if len(fragment) > 100:
+                                    fragment_clean += "..."
+                                
+                                annotations.append({
+                                    "lyric": fragment_clean,
+                                    "explanation": annotation_text.strip(),
+                                    "votes": annotation.get("votes_total", 0)
+                                })
+        except Exception as e:
+            print(f"Genius annotations API error: {e}")
+        
+        if not annotations:
+            try:
+                async with httpx.AsyncClient(follow_redirects=True) as client:
+                    response = await client.get(url, headers=self.headers, timeout=15.0)
+                    if response.status_code == 200:
+                        soup = BeautifulSoup(response.text, 'html.parser')
+                        
+                        annotation_elems = soup.select('[class*="Annotation"]')
+                        for elem in annotation_elems[:5]:
+                            text = elem.get_text(strip=True)
+                            if text and len(text) > 30:
+                                annotations.append({
+                                    "lyric": "",
+                                    "explanation": text[:500],
+                                    "votes": 0
+                                })
+            except Exception as e:
+                print(f"Genius annotation scrape error: {e}")
+        
+        return annotations
     
     async def fetch(
         self,
@@ -140,15 +202,38 @@ class GeniusSource(DataSource):
                 category="lyrics"
             ))
         
-        if song.get("annotation_count", 0) > 0:
-            cards.append(InfoCard(
-                id=str(uuid.uuid4()),
-                source=CardSource.GENIUS,
-                title="Community Annotations",
-                summary=f"This song has {song['annotation_count']} annotations from the Genius community explaining lyrics and references.",
-                url=song["url"],
-                track_id=track_id,
-                category="lyrics"
-            ))
+        if song.get("annotation_count", 0) > 0 and song.get("id"):
+            annotations = await self._get_annotations(song["id"], song["url"])
+            
+            if annotations:
+                formatted_annotations = []
+                for i, ann in enumerate(annotations[:5], 1):
+                    lyric = ann.get("lyric", "")
+                    explanation = ann.get("explanation", "")
+                    
+                    if lyric and explanation:
+                        formatted_annotations.append(
+                            f'"{lyric}"\n{explanation}'
+                        )
+                    elif explanation:
+                        formatted_annotations.append(explanation)
+                
+                if formatted_annotations:
+                    summary_text = formatted_annotations[0]
+                    if len(summary_text) > 400:
+                        summary_text = summary_text[:400] + "..."
+                    
+                    full_content = "\n\n---\n\n".join(formatted_annotations)
+                    
+                    cards.append(InfoCard(
+                        id=str(uuid.uuid4()),
+                        source=CardSource.GENIUS,
+                        title="Community Insights",
+                        summary=summary_text,
+                        full_content=full_content if len(formatted_annotations) > 1 else None,
+                        url=song["url"],
+                        track_id=track_id,
+                        category="lyrics"
+                    ))
         
         return cards
