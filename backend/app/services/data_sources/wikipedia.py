@@ -138,19 +138,32 @@ Which Wikipedia page title matches this context best?"""
         return result
     
     def _format_full_content(self, text: str) -> str:
-        """Format full content with proper paragraph breaks."""
+        """Format full content with proper paragraph breaks for detailed reading."""
         if not text:
             return ""
         
-        paragraphs = text.split('\n\n')
+        # Split by various paragraph indicators
+        paragraphs = text.replace('\n\n\n', '\n\n').split('\n\n')
         formatted_paragraphs = []
+        total_length = 0
+        max_length = 3000  # Allow more content for expanded view
         
         for para in paragraphs:
             para = para.strip()
-            if para and len(para) > 50:
-                formatted_paragraphs.append(para)
+            # Skip very short paragraphs, headers, or reference sections
+            if len(para) < 50:
+                continue
+            if para.lower().startswith(('see also', 'references', 'external links', 'notes', 'bibliography')):
+                break
+            
+            formatted_paragraphs.append(para)
+            total_length += len(para)
+            
+            # Stop if we have enough content
+            if total_length > max_length or len(formatted_paragraphs) >= 8:
+                break
         
-        return '\n\n'.join(formatted_paragraphs[:10])
+        return '\n\n'.join(formatted_paragraphs)
     
     async def fetch(
         self,
@@ -168,8 +181,8 @@ Which Wikipedia page title matches this context best?"""
         )
         if artist_result:
             artist_page, _ = artist_result
-            summary = self._format_summary(artist_page.summary, max_length=500)
-            full_content = self._format_full_content(artist_page.text[:5000]) if artist_page.text else None
+            summary = self._format_summary(artist_page.summary, max_length=400)
+            full_content = self._format_full_content(artist_page.text[:8000]) if artist_page.text else None
             
             cards.append(InfoCard(
                 id=str(uuid.uuid4()),
@@ -195,8 +208,8 @@ Which Wikipedia page title matches this context best?"""
             )
             if album_result:
                 album_page, _ = album_result
-                summary = self._format_summary(album_page.summary, max_length=500)
-                full_content = self._format_full_content(album_page.text[:5000]) if album_page.text else None
+                summary = self._format_summary(album_page.summary, max_length=400)
+                full_content = self._format_full_content(album_page.text[:8000]) if album_page.text else None
                 
                 cards.append(InfoCard(
                     id=str(uuid.uuid4()),
@@ -221,8 +234,8 @@ Which Wikipedia page title matches this context best?"""
         )
         if song_result:
             song_page, _ = song_result
-            summary = self._format_summary(song_page.summary, max_length=500)
-            full_content = self._format_full_content(song_page.text[:5000]) if song_page.text else None
+            summary = self._format_summary(song_page.summary, max_length=400)
+            full_content = self._format_full_content(song_page.text[:8000]) if song_page.text else None
             
             cards.append(InfoCard(
                 id=str(uuid.uuid4()),

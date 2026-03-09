@@ -12,6 +12,7 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
   const [isExpanded, setIsExpanded] = useState(false);
   
   const hasMoreContent = card.full_content && card.full_content.length > card.summary.length;
+  const showReadMore = hasMoreContent || card.summary.length > 150;
   const displayContent = isExpanded && card.full_content ? card.full_content : card.summary;
 
   return (
@@ -51,9 +52,9 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
               {card.title}
             </h4>
             
-            <div className={`text-sm text-gray-300 leading-relaxed ${isExpanded ? '' : 'line-clamp-6'}`}>
+            <div className={`text-sm text-gray-300 leading-relaxed ${isExpanded ? '' : 'line-clamp-4'}`}>
               {displayContent.split('\n\n').map((paragraph, i) => (
-                <p key={i} className={i > 0 ? 'mt-3' : ''}>
+                <p key={i} className={i > 0 ? 'mt-4' : ''}>
                   {paragraph.split('\n').map((line, j) => (
                     <span key={j}>
                       {line}
@@ -65,7 +66,7 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
             </div>
             
             {/* Expand/Collapse button */}
-            {(hasMoreContent || card.summary.length > 200) && (
+            {showReadMore && (
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
                 className="mt-2 text-sm text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
@@ -84,9 +85,9 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
           </div>
         </div>
         
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/10">
-          {card.url && (
+        {/* Action buttons - only show when expanded */}
+        {isExpanded && card.url && (
+          <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/10">
             <a
               href={card.url}
               target="_blank"
@@ -99,8 +100,8 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
               </svg>
               <span>View on {sourceConfig.label}</span>
             </a>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

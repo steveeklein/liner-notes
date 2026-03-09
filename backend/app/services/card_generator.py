@@ -84,6 +84,7 @@ class CardGenerator:
         """
         summary_lower = card.summary.lower()
         
+        # Patterns that indicate placeholder/promotional content
         placeholder_patterns = [
             "explore", "view on", "check out", "discover more",
             "full discography on", "see more on", "find more at",
@@ -91,16 +92,55 @@ class CardGenerator:
             "browse the full", "for more information"
         ]
         
+        # Patterns that are always rejected regardless of length
+        always_reject_patterns = [
+            "have the inside scoop",
+            "sign up and drop some knowledge",
+            "start the song bio",
+            "be the first to add",
+            "add your own",
+            "contribute to this page",
+            "help us build",
+            "no description available",
+            "description not available",
+            "information not found",
+            "we don't have",
+            "we couldn't find",
+            "no information found",
+            "no data available",
+            "coming soon",
+        ]
+        
+        # Check always-reject patterns first
+        for pattern in always_reject_patterns:
+            if pattern in summary_lower:
+                print(f"[Cards] Filtering out placeholder card (always reject): {card.title}", flush=True)
+                return False
+        
+        # Check conditional patterns (only reject if short)
         for pattern in placeholder_patterns:
             if pattern in summary_lower and len(card.summary) < 100:
                 print(f"[Cards] Filtering out placeholder card: {card.title}", flush=True)
                 return False
         
+        # Reject very short content
         if len(card.summary.strip()) < 30:
             print(f"[Cards] Filtering out short card: {card.title}", flush=True)
             return False
         
         return True
+    
+    def _assign_default_section(self, card: InfoCard) -> str:
+        """Assign a default section based on source and category."""
+        if card.category == "artist":
+            return "artist"
+        if card.category == "album":
+            return "album"
+        if card.category in ["reviews", "trivia", "similar", "concerts", "videos"]:
+            return "discussions"
+        if card.source == CardSource.REDDIT:
+            return "discussions"
+        return "song"
     
     async def generate_cards_stream(self, track_id: str) -> AsyncGenerator[InfoCard, None]:
         """
@@ -137,6 +177,7 @@ class CardGenerator:
                     cards = [c for c in cards if self._is_useful_card(c)]
                     
                     # Enhance cards with LLM (except LLM-generated ones)
+                    # This also assigns sections via LLM
                     if cards and source_type != CardSource.LLM:
                         for i, card in enumerate(cards):
                             if len(card.summary) >= 150:
@@ -145,6 +186,15 @@ class CardGenerator:
                                     print(f"[Cards] Enhanced card from {source_type.value}", flush=True)
                                 except Exception as e:
                                     print(f"[Cards] Enhancement failed: {e}", flush=True)
+                                    # Assign default section on failure
+                                    cards[i].section = self._assign_default_section(card)
+                            else:
+                                # Assign default section for short cards
+                                cards[i].section = self._assign_default_section(card)
+                    else:
+                        # Assign default sections for LLM-generated cards
+                        for i, card in enumerate(cards):
+                            cards[i].section = self._assign_default_section(card)
                 
                 return cards
             except Exception as e:

@@ -62,6 +62,8 @@ export type CardCategory =
   | 'similar'
   | 'history';
 
+export type CardSection = 'artist' | 'album' | 'song' | 'discussions';
+
 export interface InfoCard {
   id: string;
   source: CardSource;
@@ -72,6 +74,7 @@ export interface InfoCard {
   image_url: string | null;
   track_id: string;
   category: CardCategory;
+  section: CardSection;
   relevance_score: number;
 }
 

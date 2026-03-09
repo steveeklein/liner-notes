@@ -23,14 +23,20 @@ class ContentEnhancer:
         - Formats text into readable paragraphs
         - Front-loads the most interesting information
         - Removes filler and redundant phrases
+        - Assigns the card to the best section
         """
         if not self.api_key:
+            card.section = self._default_section(card)
             return card
         
         if len(card.summary) < 100:
+            card.section = self._default_section(card)
             return card
         
         try:
+            # Combine all available content for the LLM
+            original_content = card.full_content or card.summary
+            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     self.base_url,
@@ -44,20 +50,36 @@ class ContentEnhancer:
                             {
                                 "role": "system",
                                 "content": """Reformat music info for readability. Return JSON:
-{"summary": "max 400 chars, most interesting facts first", "full_content": "enhanced full version or null"}
+{
+  "summary": "2-3 sentences, max 350 chars. Most interesting/hook fact first.",
+  "full_content": "Detailed, well-formatted content with multiple paragraphs. Use \\n\\n between paragraphs.",
+  "section": "one of: artist, album, song, discussions"
+}
 
-Rules: Front-load interesting facts. Short paragraphs. Remove filler phrases. Keep facts accurate."""
+FULL_CONTENT RULES:
+- Write 3-5 substantial paragraphs (separated by \\n\\n)
+- Include ALL interesting facts from the source
+- Add context and background information
+- Use engaging, readable prose
+- Each paragraph should cover a distinct aspect
+- Total length: 800-1500 characters
+
+Section guide:
+- artist: Biography, career, personal facts about musician/band
+- album: Production, recording, context, significance
+- song: Lyrics meaning, composition, samples, charts, background
+- discussions: Reviews, opinions, trivia, live performances"""
                             },
                             {
                                 "role": "user",
-                                "content": f"Enhance:\n\nSummary: {card.summary[:500]}\n\nFull: {(card.full_content or 'None')[:500]}"
+                                "content": f"Title: {card.title}\nSource: {card.source.value}\nCategory: {card.category}\n\nContent to enhance:\n{original_content[:2000]}"
                             }
                         ],
                         "response_format": {"type": "json_object"},
-                        "max_tokens": 500,
-                        "temperature": 0.3
+                        "max_tokens": 1000,
+                        "temperature": 0.4
                     },
-                    timeout=10.0
+                    timeout=15.0
                 )
                 
                 if response.status_code == 200:
@@ -68,16 +90,37 @@ Rules: Front-load interesting facts. Short paragraphs. Remove filler phrases. Ke
                         parsed = json.loads(content)
                         enhanced_summary = parsed.get("summary", card.summary)
                         enhanced_full = parsed.get("full_content")
+                        section = parsed.get("section", "song")
                         
                         if enhanced_summary:
                             card.summary = enhanced_summary
-                        if enhanced_full and card.full_content:
+                        # Always set full_content if we got a good enhanced version
+                        if enhanced_full and len(enhanced_full) > len(card.summary):
                             card.full_content = enhanced_full
+                        if section in ["artist", "album", "song", "discussions"]:
+                            card.section = section
+                        else:
+                            card.section = self._default_section(card)
+                else:
+                    card.section = self._default_section(card)
         
         except Exception as e:
             print(f"Content enhancement error: {e}", flush=True)
+            card.section = self._default_section(card)
         
         return card
+    
+    def _default_section(self, card: InfoCard) -> str:
+        """Assign a default section based on source and category."""
+        if card.category == "artist":
+            return "artist"
+        if card.category == "album":
+            return "album"
+        if card.category in ["reviews", "trivia", "similar", "concerts", "videos"]:
+            return "discussions"
+        if card.source.value == "reddit":
+            return "discussions"
+        return "song"
     
     async def enhance_batch(self, cards: list[InfoCard], max_cards: int = 5) -> list[InfoCard]:
         """

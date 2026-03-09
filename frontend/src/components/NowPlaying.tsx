@@ -73,34 +73,26 @@ export function NowPlaying({
     };
   }, [track.id, track, onNewCard]);
 
-  // Separate Wikipedia cards (featured at top) from other cards
-  const wikipediaCards = cards.filter(c => c.source === 'wikipedia');
-  const otherCards = cards.filter(c => c.source !== 'wikipedia');
+  // Define sections in display order
+  const sections = [
+    { id: 'artist', label: 'About the Artist' },
+    { id: 'album', label: 'About the Album' },
+    { id: 'song', label: 'About This Song' },
+    { id: 'discussions', label: 'Discussions' },
+  ] as const;
 
-  const categorizedCards = otherCards.reduce((acc, card) => {
-    const cat = card.category;
-    if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(card);
-    return acc;
-  }, {} as Record<string, InfoCard[]>);
-
-  // Sort cards within each category: prioritize by source reliability
-  const sourceOrder = ['genius', 'musicbrainz', 'discogs', 'lastfm', 'allmusic', 'llm'];
-  Object.keys(categorizedCards).forEach(cat => {
-    categorizedCards[cat].sort((a, b) => {
-      const aIdx = sourceOrder.indexOf(a.source);
-      const bIdx = sourceOrder.indexOf(b.source);
-      return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
-    });
+  // Sort cards by source reliability within each section
+  const sourceOrder = ['wikipedia', 'genius', 'musicbrainz', 'discogs', 'lastfm', 'allmusic', 'llm', 'reddit'];
+  const sortedCards = [...cards].sort((a, b) => {
+    const aIdx = sourceOrder.indexOf(a.source);
+    const bIdx = sourceOrder.indexOf(b.source);
+    return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
   });
 
-  const categoryOrder = [
-    'song', 'lyrics', 'artist', 'album', 'credits', 
-    'samples', 'charts', 'similar', 'concerts', 'videos', 
-    'genre', 'history', 'reviews', 'trivia'
-  ];
-
-  const sortedCategories = categoryOrder.filter(cat => categorizedCards[cat]);
+  // Get cards for each section using the backend-assigned section field
+  const getCardsForSection = (sectionId: string): InfoCard[] => {
+    return sortedCards.filter(card => card.section === sectionId);
+  };
 
   const cardsContent = (
     <>
@@ -114,41 +106,33 @@ export function NowPlaying({
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          {/* Wikipedia cards pinned at top */}
-          {wikipediaCards.length > 0 && (
-            <div>
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                Overview
-              </h3>
-              <div className="flex flex-col gap-3">
-                {wikipediaCards.map((card) => (
-                  <InfoCardComponent
-                    key={card.id}
-                    card={card}
-                    onDismiss={() => onDismissCard(card.id)}
-                  />
-                ))}
+          {sections.map(section => {
+            const sectionCards = getCardsForSection(section.id);
+            const visibleCard = sectionCards[0]; // Show only first card
+            const remainingCount = sectionCards.length - 1;
+            
+            if (!visibleCard) return null;
+            
+            return (
+              <div key={section.id}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    {section.label}
+                  </h3>
+                  {remainingCount > 0 && (
+                    <span className="text-xs text-gray-600">
+                      +{remainingCount} more
+                    </span>
+                  )}
+                </div>
+                <InfoCardComponent
+                  key={visibleCard.id}
+                  card={visibleCard}
+                  onDismiss={() => onDismissCard(visibleCard.id)}
+                />
               </div>
-            </div>
-          )}
-          
-          {/* Other cards by category */}
-          {sortedCategories.map(category => (
-            <div key={category}>
-              <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                {formatCategory(category)}
-              </h3>
-              <div className="flex flex-col gap-3">
-                {categorizedCards[category].map((card) => (
-                  <InfoCardComponent
-                    key={card.id}
-                    card={card}
-                    onDismiss={() => onDismissCard(card.id)}
-                  />
-                ))}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </>
@@ -237,24 +221,4 @@ export function NowPlaying({
       </div>
     </div>
   );
-}
-
-function formatCategory(category: string): string {
-  const labels: Record<string, string> = {
-    song: 'About This Song',
-    lyrics: 'Lyrics & Meaning',
-    artist: 'About the Artist',
-    album: 'About the Album',
-    credits: 'Credits',
-    samples: 'Samples & Covers',
-    charts: 'Charts & Stats',
-    similar: 'Similar Music',
-    concerts: 'Live & Tours',
-    videos: 'Videos',
-    genre: 'Genre & Style',
-    history: 'History',
-    reviews: 'Reviews',
-    trivia: 'Trivia & More',
-  };
-  return labels[category] || category;
 }

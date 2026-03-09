@@ -95,6 +95,9 @@ class InfoCard(BaseModel):
         "lyrics", "samples", "credits", "reviews", 
         "charts", "concerts", "videos", "similar", "history"
     ]
+    section: Literal[
+        "artist", "album", "song", "discussions"
+    ] = "song"
     relevance_score: float = 1.0
 
 
