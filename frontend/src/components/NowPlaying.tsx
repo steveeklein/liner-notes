@@ -8,6 +8,7 @@ interface NowPlayingProps {
   cards: InfoCard[];
   onNewCard: (card: InfoCard) => void;
   onDismissCard: (cardId: string) => void;
+  onRefreshSection?: (sectionId: string) => Promise<void>;
 }
 
 export function NowPlaying({
@@ -15,10 +16,12 @@ export function NowPlaying({
   cards,
   onNewCard,
   onDismissCard,
+  onRefreshSection,
 }: NowPlayingProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const connectedTrackRef = useRef<string | null>(null);
   const [streamDone, setStreamDone] = useState(false);
+  const [refreshingSection, setRefreshingSection] = useState<string | null>(null);
 
   useEffect(() => {
     if (!track.id) return;
@@ -118,15 +121,45 @@ export function NowPlaying({
 
             return (
               <div key={section.id}>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-2 gap-2">
                   <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {section.label}
                   </h3>
-                  {sectionCards.length > 1 && (
-                    <span className="text-xs text-gray-600">
-                      {sectionCards.length} cards
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {sectionCards.length > 1 && (
+                      <span className="text-xs text-gray-600">
+                        {sectionCards.length} cards
+                      </span>
+                    )}
+                    {onRefreshSection && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setRefreshingSection(section.id);
+                          try {
+                            await onRefreshSection(section.id);
+                          } finally {
+                            setRefreshingSection(null);
+                          }
+                        }}
+                        disabled={refreshingSection !== null}
+                        className="p-1.5 rounded-md text-gray-500 hover:text-indigo-400 hover:bg-white/5 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                        title="Refresh this section with new information"
+                        aria-label={`Refresh ${section.label}`}
+                      >
+                        {refreshingSection === section.id ? (
+                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden>
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                        ) : (
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col gap-3">
                   {sectionCards.length > 0 ? (

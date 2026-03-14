@@ -91,6 +91,10 @@ export const cards = {
   refresh: (trackId: string) =>
     fetchAPI<{ status: string }>(`/cards/${trackId}/refresh`, { method: 'POST' }),
 
+  /** Re-fetch cards for one section; returns new cards for that section. */
+  refreshSection: (trackId: string, section: string) =>
+    fetchAPI<InfoCard[]>(`/cards/${trackId}/refresh-section?section=${encodeURIComponent(section)}`, { method: 'POST' }),
+
   connectWebSocket: (
     trackId: string,
     onCard: (card: InfoCard) => void,

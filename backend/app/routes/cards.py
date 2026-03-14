@@ -91,3 +91,15 @@ async def refresh_cards(track_id: str):
     """Force refresh cards for a track."""
     await card_generator.invalidate_cache(track_id)
     return {"status": "refreshing", "track_id": track_id}
+
+
+@router.post("/{track_id}/refresh-section", response_model=List[InfoCard])
+async def refresh_section(track_id: str, section: str):
+    """
+    Re-fetch cards for one section (artist, album, song, discussions).
+    Returns the new cards for that section; existing section cards are replaced.
+    """
+    if section not in ("artist", "album", "song", "discussions"):
+        raise HTTPException(status_code=400, detail="section must be one of: artist, album, song, discussions")
+    cards = await card_generator.refresh_section(track_id, section)
+    return cards

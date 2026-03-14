@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { LoginScreen } from './components/LoginScreen';
 import { NowPlaying } from './components/NowPlaying';
 import { SearchSheet } from './components/SearchSheet';
-import { auth, playback } from './api';
+import { auth, playback, cards as cardsApi } from './api';
 import type { AuthStatus, Track, InfoCard } from './types';
 
 function App() {
@@ -101,6 +101,16 @@ function App() {
     setCards((prev) => prev.filter((c) => c.id !== cardId));
   }, []);
 
+  const handleRefreshSection = useCallback(async (sectionId: string) => {
+    if (!currentTrack) return;
+    try {
+      const newCards = await cardsApi.refreshSection(currentTrack.id, sectionId);
+      setCards((prev) => prev.filter((c) => c.section !== sectionId).concat(newCards));
+    } catch (err) {
+      console.error('[Refresh section]', err);
+    }
+  }, [currentTrack?.id]);
+
   if (isLoading) {
     return (
       <div className="h-full flex items-center justify-center bg-[#0f0f0f]">
@@ -149,6 +159,7 @@ function App() {
             cards={cards}
             onNewCard={handleNewCard}
             onDismissCard={handleDismissCard}
+            onRefreshSection={handleRefreshSection}
           />
         ) : (
           <div className="h-full flex flex-col overflow-y-auto hide-scrollbar px-4 pb-24">

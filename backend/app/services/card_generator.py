@@ -162,6 +162,35 @@ class CardGenerator:
             return "discussions"
         return "song"
 
+    # Sources to run when refreshing a specific section (avoids re-running all sources)
+    SECTION_SOURCES: Dict[str, List[CardSource]] = {
+        "artist": [
+            CardSource.LLM,
+            CardSource.WIKIPEDIA,
+            CardSource.GENIUS,
+            CardSource.MUSICBRAINZ,
+            CardSource.DISCOGS,
+            CardSource.ALLMUSIC,
+            CardSource.LASTFM,
+        ],
+        "album": [
+            CardSource.LLM,
+            CardSource.WIKIPEDIA,
+            CardSource.DISCOGS,
+        ],
+        "song": [
+            CardSource.LLM,
+            CardSource.WIKIPEDIA,
+            CardSource.GENIUS,
+            CardSource.MUSICBRAINZ,
+            CardSource.SPOTIFY_DATA,
+        ],
+        "discussions": [
+            CardSource.REDDIT,
+            CardSource.WEB_SEARCH,
+        ],
+    }
+
     async def _fetch_from_source(
         self, source_type: CardSource, track_id: str
     ) -> List[InfoCard]:
@@ -233,6 +262,44 @@ class CardGenerator:
         except Exception as e:
             print(f"[Cards] Error from {source_type.value}: {e}", flush=True)
             return []
+
+    async def refresh_section(self, track_id: str, section: str) -> List[InfoCard]:
+        """
+        Re-fetch cards for one section and replace that section's cards in the cache.
+        Returns the new cards for that section so the client can update the UI.
+        """
+        if track_id not in self.track_info:
+            print(f"[Cards] refresh_section: no track info for {track_id}", flush=True)
+            return []
+        if section not in self.SECTION_SOURCES:
+            print(f"[Cards] refresh_section: invalid section {section}", flush=True)
+            return []
+
+        source_list = self.SECTION_SOURCES[section]
+        new_cards: List[InfoCard] = []
+        for source_type in source_list:
+            if source_type not in self.sources:
+                continue
+            cards = await self._fetch_from_source(source_type, track_id)
+            for card in cards:
+                if card.section == section:
+                    new_cards.append(card)
+
+        # Replace this section's cards in cache
+        if track_id in self.cache:
+            self.cache[track_id] = [
+                c for c in self.cache[track_id] if c.section != section
+            ] + new_cards
+            self.cache[track_id] = sorted(
+                self.cache[track_id],
+                key=lambda c: c.relevance_score,
+                reverse=True,
+            )
+        else:
+            self.cache[track_id] = sorted(new_cards, key=lambda c: c.relevance_score, reverse=True)
+
+        print(f"[Cards] Refreshed section '{section}': {len(new_cards)} new cards", flush=True)
+        return new_cards
 
     async def generate_cards_stream(self, track_id: str) -> AsyncGenerator[InfoCard, None]:
         """
