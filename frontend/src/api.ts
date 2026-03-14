@@ -40,8 +40,14 @@ export const auth = {
 
   getStatus: () => fetchAPI<AuthStatus>('/auth/status'),
 
-  /** Get Spotify OAuth URL and redirect there (avoids full-page nav proxy issues). */
-  getSpotifyLoginUrl: () => fetchAPI<{ url: string }>('/auth/spotify/url'),
+  /** Get Spotify OAuth URL and redirect there. Pass forceLogin=true after Sign Out so user must log in again at Spotify. */
+  getSpotifyLoginUrl: (forceLogin?: boolean, returnTo?: string) => {
+    const params = new URLSearchParams();
+    if (forceLogin) params.set('force_login', 'true');
+    if (returnTo) params.set('return_to', returnTo);
+    const q = params.toString();
+    return fetchAPI<{ url: string }>(`/auth/spotify/url${q ? `?${q}` : ''}`);
+  },
 };
 
 export const playback = {

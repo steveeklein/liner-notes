@@ -10,6 +10,7 @@ from .whosampled import WhoSampledSource
 from .setlistfm import SetlistFmSource
 from .youtube import YouTubeSource
 from .reddit import RedditSource
+from .discussion_search import DiscussionSearchSource
 from .spotify_data import SpotifyDataSource
 from .billboard import BillboardSource
 
@@ -26,6 +27,7 @@ __all__ = [
     "SetlistFmSource",
     "YouTubeSource",
     "RedditSource",
+    "DiscussionSearchSource",
     "SpotifyDataSource",
     "BillboardSource",
 ]

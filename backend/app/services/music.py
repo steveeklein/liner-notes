@@ -229,10 +229,10 @@ class SpotifyProvider(MusicProviderInterface):
         except Exception as e:
             print(f"[Spotify] Failed to save tokens: {e}", flush=True)
     
-    def get_auth_url(self, redirect_uri: str) -> str:
-        """Generate Spotify OAuth authorization URL."""
+    def get_auth_url(self, redirect_uri: str, show_dialog: bool = False, state: str = None) -> str:
+        """Generate Spotify OAuth authorization URL. show_dialog=True forces the consent dialog. state is passed back to callback for return URL."""
         from urllib.parse import urlencode
-        
+
         scopes = [
             "user-read-playback-state",
             "user-modify-playback-state",
@@ -248,8 +248,10 @@ class SpotifyProvider(MusicProviderInterface):
             "redirect_uri": redirect_uri,
             "scope": " ".join(scopes),
         }
-        # Do not set show_dialog=true: that forces the consent screen every time.
-        # Without it, Spotify shows consent only on first authorization (or when scopes change).
+        if show_dialog:
+            params["show_dialog"] = "true"
+        if state:
+            params["state"] = state
         return f"https://accounts.spotify.com/authorize?{urlencode(params)}"
     
     async def exchange_code(self, code: str, redirect_uri: str) -> bool:
@@ -730,10 +732,10 @@ class MusicService:
         self.active_provider: Optional[MusicProvider] = None
         self.username: Optional[str] = None
     
-    def get_spotify_auth_url(self, redirect_uri: str) -> str:
-        """Get Spotify OAuth authorization URL."""
+    def get_spotify_auth_url(self, redirect_uri: str, show_dialog: bool = False, state: str = None) -> str:
+        """Get Spotify OAuth authorization URL. show_dialog=True forces the consent dialog. state is passed back to callback."""
         spotify = self.providers[MusicProvider.SPOTIFY]
-        return spotify.get_auth_url(redirect_uri)
+        return spotify.get_auth_url(redirect_uri, show_dialog=show_dialog, state=state)
     
     async def complete_spotify_auth(self, code: str, redirect_uri: str) -> bool:
         """Complete Spotify OAuth flow with authorization code."""

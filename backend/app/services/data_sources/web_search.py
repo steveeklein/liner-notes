@@ -127,31 +127,38 @@ class WebSearchSource(DataSource):
         artist: str,
         track_title: str,
         album: str,
-        track_id: str
+        track_id: str,
+        **kwargs
     ) -> List[InfoCard]:
+        variation = kwargs.get("variation", False)
         cards = []
         seen_urls = set()
-        
-        queries = [
-            (f'{artist} {track_title} meaning lyrics', "Song Meaning"),
-            (f'{artist} {track_title} story behind', "Behind the Song"),
-            (f'{artist} band history facts', "Artist Facts"),
-            (f'{artist} discography albums', "Discography"),
-        ]
-        
+
+        if variation:
+            queries = [
+                (f'{artist} {track_title} backstory context', "Backstory"),
+                (f'{artist} {track_title} production recording', "Recording"),
+                (f'{artist} career influence', "Artist Context"),
+                (f'{artist} {track_title} interpretation', "Interpretation"),
+            ]
+        else:
+            queries = [
+                (f'{artist} {track_title} meaning lyrics', "Song Meaning"),
+                (f'{artist} {track_title} story behind', "Behind the Song"),
+                (f'{artist} band history facts', "Artist Facts"),
+                (f'{artist} discography albums', "Discography"),
+            ]
+
         for query, card_title in queries:
             if len(cards) >= 4:
                 break
-                
             if self.serpapi_key:
                 results = await self._search_serpapi(query)
             else:
                 results = await self._search_duckduckgo(query)
-            
             for result in results[:1]:
                 url = result.get("url", "")
                 snippet = result.get("snippet", "")
-                
                 if snippet and url and url not in seen_urls:
                     seen_urls.add(url)
                     cards.append(InfoCard(
@@ -163,5 +170,4 @@ class WebSearchSource(DataSource):
                         track_id=track_id,
                         category="trivia"
                     ))
-        
         return cards

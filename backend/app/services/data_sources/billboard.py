@@ -111,7 +111,8 @@ class BillboardSource(DataSource):
         artist: str,
         track_title: str,
         album: str,
-        track_id: str
+        track_id: str,
+        **kwargs
     ) -> List[InfoCard]:
         cards = []
         

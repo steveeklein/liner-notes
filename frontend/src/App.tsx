@@ -70,6 +70,8 @@ function App() {
     setAuthStatus({ authenticated: false, provider: null, user_name: null });
     setCurrentTrack(null);
     setCards([]);
+    // Next time they click "Continue with Spotify", force them to sign in again (clear Spotify session then)
+    sessionStorage.setItem('spotify_force_login', '1');
   }, []);
 
   const handleTrackSelect = useCallback((track: Track) => {

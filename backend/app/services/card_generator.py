@@ -19,6 +19,7 @@ from app.services.data_sources import (
     SetlistFmSource,
     YouTubeSource,
     RedditSource,
+    DiscussionSearchSource,
     SpotifyDataSource,
     BillboardSource,
 )
@@ -59,6 +60,7 @@ class CardGenerator:
             
             # Community discussions
             CardSource.REDDIT: RedditSource(),
+            CardSource.DISCUSSION_SEARCH: DiscussionSearchSource(),
 
             # General web search
             CardSource.WEB_SEARCH: WebSearchSource(),
@@ -158,7 +160,7 @@ class CardGenerator:
             return "album"
         if card.category in ["reviews", "trivia", "similar", "concerts", "videos"]:
             return "discussions"
-        if card.source == CardSource.REDDIT:
+        if card.source in (CardSource.REDDIT, CardSource.DISCUSSION_SEARCH):
             return "discussions"
         return "song"
 
@@ -187,14 +189,15 @@ class CardGenerator:
         ],
         "discussions": [
             CardSource.REDDIT,
+            CardSource.DISCUSSION_SEARCH,
             CardSource.WEB_SEARCH,
         ],
     }
 
     async def _fetch_from_source(
-        self, source_type: CardSource, track_id: str
+        self, source_type: CardSource, track_id: str, variation: bool = False
     ) -> List[InfoCard]:
-        """Fetch cards from a single source. Used by generate_cards_stream and refresh_section."""
+        """Fetch cards from a single source. variation=True asks for new/different content (e.g. on section refresh)."""
         if track_id not in self.track_info:
             return []
         info = self.track_info[track_id]
@@ -207,13 +210,11 @@ class CardGenerator:
         source = self.sources[source_type]
         try:
             print(f"[Cards] Fetching from {source_type.value}...", flush=True)
+            kwargs = {"artist": artist, "track_title": title, "album": album, "track_id": track_id}
+            if variation:
+                kwargs["variation"] = True
             cards = await asyncio.wait_for(
-                source.fetch(
-                    artist=artist,
-                    track_title=title,
-                    album=album,
-                    track_id=track_id,
-                ),
+                source.fetch(**kwargs),
                 timeout=SOURCE_TIMEOUT,
             )
             print(f"[Cards] {source_type.value} returned {len(cards)} cards", flush=True)
@@ -280,7 +281,7 @@ class CardGenerator:
         for source_type in source_list:
             if source_type not in self.sources:
                 continue
-            cards = await self._fetch_from_source(source_type, track_id)
+            cards = await self._fetch_from_source(source_type, track_id, variation=True)
             for card in cards:
                 if card.section == section:
                     new_cards.append(card)
@@ -326,6 +327,7 @@ class CardGenerator:
         # Secondary sources: Mix of free and paid
         secondary_sources = [
             CardSource.REDDIT,  # Free public API
+            CardSource.DISCUSSION_SEARCH,  # Quora, forums, Stack Exchange via DDG
             CardSource.WEB_SEARCH,  # DuckDuckGo fallback is free
             CardSource.SPOTIFY_DATA,  # Uses existing auth
             CardSource.LASTFM,  # Requires API key

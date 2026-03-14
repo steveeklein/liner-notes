@@ -21,16 +21,41 @@ class LLMSource(DataSource):
         artist: str,
         track_title: str,
         album: str,
-        track_id: str
+        track_id: str,
+        **kwargs
     ) -> List[InfoCard]:
         if not self.api_key:
             print("[LLM] No GROQ_API_KEY set, skipping", flush=True)
             return []
-        
-        print(f"[LLM] Calling Groq API for: {track_title} by {artist}", flush=True)
-        
+        variation = kwargs.get("variation", False)
+        print(f"[LLM] Calling Groq API for: {track_title} by {artist}" + (" (variation)" if variation else ""), flush=True)
+
         cards = []
-        
+
+        if variation:
+            system_content = """You are a music expert. The user is asking for FRESH insights they have not seen before. Return JSON with exactly 3 insights:
+{
+  "artist_insight": {"title": "3-5 words", "content": "1-2 paragraphs with DIFFERENT facts than a standard bio: lesser-known stories, specific anecdotes, a different angle, or deeper cut."},
+  "album_insight": {"title": "3-5 words", "content": "1-2 paragraphs with DIFFERENT facts about this album - not the same summary. New angle, session details, or context."},
+  "track_insight": {"title": "3-5 words", "content": "1-2 paragraphs with DIFFERENT facts about this song - behind-the-scenes, alternate take, or lesser-known detail."}
+}
+Rules: Be SPECIFIC. Do NOT repeat common biographical or summary content. Give NEW angles, lesser-known facts, or different aspects."""
+        else:
+            system_content = """You are a music expert. Return JSON with exactly 3 insights:
+{
+  "artist_insight": {"title": "3-5 words about artist", "content": "1-2 paragraphs with specific facts about the artist"},
+  "album_insight": {"title": "3-5 words about album", "content": "1-2 paragraphs with specific facts about this album"},
+  "track_insight": {"title": "3-5 words about track", "content": "1-2 paragraphs with specific facts about this specific song"}
+}
+Rules:
+- Be SPECIFIC: mention dates, chart positions, collaborators, behind-the-scenes stories
+- Lead each insight with the most surprising/interesting fact
+- Keep each insight focused on its category (artist/album/track)
+- If album is unknown, make album_insight about the artist's discography instead"""
+
+        user_content = "Give me FRESH, different insights (not the same summary). " if variation else ""
+        user_content += f"Insights about the song '{track_title}' by {artist}" + (f" from the album '{album}'" if album else "")
+
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -42,29 +67,12 @@ class LLMSource(DataSource):
                     json={
                         "model": self.model,
                         "messages": [
-                            {
-                                "role": "system",
-                                "content": """You are a music expert. Return JSON with exactly 3 insights:
-{
-  "artist_insight": {"title": "3-5 words about artist", "content": "1-2 paragraphs with specific facts about the artist"},
-  "album_insight": {"title": "3-5 words about album", "content": "1-2 paragraphs with specific facts about this album"},
-  "track_insight": {"title": "3-5 words about track", "content": "1-2 paragraphs with specific facts about this specific song"}
-}
-
-Rules:
-- Be SPECIFIC: mention dates, chart positions, collaborators, behind-the-scenes stories
-- Lead each insight with the most surprising/interesting fact
-- Keep each insight focused on its category (artist/album/track)
-- If album is unknown, make album_insight about the artist's discography instead"""
-                            },
-                            {
-                                "role": "user",
-                                "content": f"Give me insights about the song '{track_title}' by {artist}" + (f" from the album '{album}'" if album else "")
-                            }
+                            {"role": "system", "content": system_content},
+                            {"role": "user", "content": user_content}
                         ],
                         "response_format": {"type": "json_object"},
                         "max_tokens": 800,
-                        "temperature": 0.7
+                        "temperature": 0.8 if variation else 0.7
                     },
                     timeout=15.0
                 )

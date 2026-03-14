@@ -73,7 +73,8 @@ class CardSource(str, Enum):
     
     # Social & community
     REDDIT = "reddit"
-    
+    DISCUSSION_SEARCH = "discussion_search"  # Quora, forums, Stack Exchange, etc.
+
     # General web
     WEB_SEARCH = "web_search"
     

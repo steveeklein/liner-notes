@@ -12,7 +12,8 @@ class DataSource(ABC):
         artist: str,
         track_title: str,
         album: str,
-        track_id: str
+        track_id: str,
+        **kwargs
     ) -> List[InfoCard]:
-        """Fetch info cards from this data source."""
+        """Fetch info cards from this data source. kwargs may include variation=True for refresh (new content)."""
         pass

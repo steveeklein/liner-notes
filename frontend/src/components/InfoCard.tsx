@@ -83,7 +83,7 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
         </div>
         
         {/* Link to source: always show for Reddit/discussions; for others show when expanded */}
-        {card.url && (isExpanded || card.source === 'reddit') && (
+        {card.url && (isExpanded || card.source === 'reddit' || card.source === 'discussion_search') && (
           <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/10">
             <a
               href={card.url}
@@ -115,6 +115,7 @@ function getSourceConfig(source: CardSource): { label: string; className: string
     billboard: { label: 'Billboard', className: 'source-billboard' },
     youtube: { label: 'YouTube', className: 'source-youtube' },
     reddit: { label: 'Reddit', className: 'source-reddit' },
+    discussion_search: { label: 'Discussion', className: 'source-discussion' },
     spotify_data: { label: 'Spotify', className: 'source-spotify' },
     setlistfm: { label: 'Setlist.fm', className: 'source-setlistfm' },
     allmusic: { label: 'AllMusic', className: 'source-allmusic' },

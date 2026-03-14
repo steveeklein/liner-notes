@@ -83,7 +83,7 @@ export function NowPlaying({
   ] as const;
 
   // Sort cards by source reliability within each section
-  const sourceOrder = ['wikipedia', 'genius', 'musicbrainz', 'discogs', 'lastfm', 'allmusic', 'llm', 'reddit'];
+  const sourceOrder = ['wikipedia', 'genius', 'musicbrainz', 'discogs', 'lastfm', 'allmusic', 'llm', 'reddit', 'discussion_search', 'web_search'];
   const sortedCards = [...cards].sort((a, b) => {
     const aIdx = sourceOrder.indexOf(a.source);
     const bIdx = sourceOrder.indexOf(b.source);
@@ -97,15 +97,13 @@ export function NowPlaying({
 
   const cardsContent = (
     <>
-      {cards.length === 0 && !streamDone ? (
-        <div className="text-center py-8">
-          <div className="w-12 h-12 rounded-full bg-[#252525] flex items-center justify-center mx-auto mb-3">
-            <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
-          </div>
-          <p className="text-gray-400 text-sm">Loading liner notes...</p>
-          <p className="text-gray-500 text-xs mt-1">Fetching from multiple sources</p>
+      {cards.length === 0 && !streamDone && (
+        <div className="flex items-center gap-2 px-1 py-2 mb-2 text-gray-500">
+          <div className="w-4 h-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+          <p className="text-sm">Loading liner notes…</p>
         </div>
-      ) : cards.length === 0 && streamDone ? (
+      )}
+      {cards.length === 0 && streamDone ? (
         <div className="text-center py-8 px-4">
           <p className="text-gray-400 text-sm">No liner notes found for this track.</p>
           <p className="text-gray-500 text-xs mt-2 max-w-sm mx-auto">
@@ -117,7 +115,9 @@ export function NowPlaying({
           {sections.map(section => {
             const sectionCards = getCardsForSection(section.id);
             const showEmptyNote = streamDone && sectionCards.length === 0 && (section.id === 'album' || section.id === 'song');
-            if (sectionCards.length === 0 && !showEmptyNote) return null;
+            const showSection = sectionCards.length > 0 || showEmptyNote || streamDone || (section.id === 'artist' || section.id === 'album' || section.id === 'song' || section.id === 'discussions');
+
+            if (!showSection) return null;
 
             return (
               <div key={section.id}>
@@ -128,7 +128,7 @@ export function NowPlaying({
                   <div className="flex items-center gap-2">
                     {sectionCards.length > 1 && (
                       <span className="text-xs text-gray-600">
-                        {sectionCards.length} cards
+                        1 of {sectionCards.length}
                       </span>
                     )}
                     {onRefreshSection && (
@@ -143,17 +143,17 @@ export function NowPlaying({
                           }
                         }}
                         disabled={refreshingSection !== null}
-                        className="p-1.5 rounded-md text-gray-500 hover:text-indigo-400 hover:bg-white/5 disabled:opacity-50 disabled:pointer-events-none transition-colors"
+                        className="p-2 rounded-lg text-gray-400 hover:text-indigo-400 hover:bg-white/10 disabled:opacity-50 disabled:pointer-events-none transition-colors border border-gray-600/50 hover:border-indigo-500/50"
                         title="Refresh this section with new information"
                         aria-label={`Refresh ${section.label}`}
                       >
                         {refreshingSection === section.id ? (
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden>
+                          <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden>
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                           </svg>
                         ) : (
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
+                          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                           </svg>
                         )}
@@ -163,16 +163,18 @@ export function NowPlaying({
                 </div>
                 <div className="flex flex-col gap-3">
                   {sectionCards.length > 0 ? (
-                    sectionCards.map(card => (
-                      <InfoCardComponent
-                        key={card.id}
-                        card={card}
-                        onDismiss={() => onDismissCard(card.id)}
-                      />
-                    ))
-                  ) : (
+                    <InfoCardComponent
+                      key={sectionCards[0].id}
+                      card={sectionCards[0]}
+                      onDismiss={() => onDismissCard(sectionCards[0].id)}
+                    />
+                  ) : section.id === 'album' || section.id === 'song' ? (
                     <p className="text-gray-500 text-xs py-2">
                       {section.id === 'album' ? 'No album info found for this track.' : 'No song info found for this track.'}
+                    </p>
+                  ) : (
+                    <p className="text-gray-500 text-xs py-2">
+                      {section.id === 'artist' ? 'No artist info found.' : 'No discussions found.'}
                     </p>
                   )}
                 </div>

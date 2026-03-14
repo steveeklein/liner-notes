@@ -143,6 +143,36 @@ class DiscogsSource(DataSource):
             print(f"Discogs artist releases error: {e}", flush=True)
         return None
     
+    # Roles that are not performing musicians (production, visual, management, technical, etc.).
+    # Only include people whose role is performing (instruments, vocals). Discogs role can be "Guitar, Backing Vocals".
+    _NON_MUSICIAN_ROLES = frozenset({
+        "producer", "co-producer", "executive producer", "reissue producer", "compilation producer",
+        "engineer", "mixed by", "mastered by", "recorded by", "remastered by", "edited by",
+        "design", "artwork", "art direction", "photography", "photography by", "illustration",
+        "cover", "sleeve", "graphic design", "layout", "typography", "painting",
+        "management", "legal", "a&r", "coordinator", "consultant", "marketing", "promotion",
+        "liner notes", "sleeve notes", "booklet editor", "author", "narrator", "read by",
+        "written-by", "written by", "composed by", "lyrics by", "arranged by", "orchestrated by",
+        "programmed by", "drum programming", "sequenced by", "score", "copyist",
+        "directed by", "film director", "video director", "choreography",
+        "other", "research", "supervised by", "post production", "restoration",
+    })
+
+    @staticmethod
+    def _role_is_musician(role: str) -> bool:
+        """True if this role is a performing musician (instrument/vocals), not production/design/etc."""
+        if not role or not role.strip():
+            return True  # No role: include (e.g. main artist)
+        # Discogs can have "Guitar, Backing Vocals" — all parts must be musician roles
+        parts = [p.strip().lower() for p in role.split(",") if p.strip()]
+        for p in parts:
+            if p in DiscogsSource._NON_MUSICIAN_ROLES:
+                return False
+            # Partial match for known non-musician prefixes
+            if any(p.startswith(nm) or nm in p for nm in ("producer", "engineer", "design", "photography", "management", "legal", "liner notes", "written", "composed by", "artwork", "mastered", "mixed by", "recorded by")):
+                return False
+        return True
+
     def _build_personnel_card(
         self,
         release_id: int,
@@ -152,9 +182,10 @@ class DiscogsSource(DataSource):
         style: list,
         track_id: str,
     ) -> Optional[InfoCard]:
-        """Build a 'Who's playing on this album' card from Discogs artists + extraartists."""
+        """Build a 'Who's playing on this album' card from Discogs artists + extraartists. Excludes non-musicians (e.g. Producer, Design, Photography)."""
         lines = []
         seen = set()
+
         def _name(entry):
             n = entry.get("name")
             if n:
@@ -171,6 +202,7 @@ class DiscogsSource(DataSource):
                 return f"https://www.discogs.com/artist/{art['id']}"
             return None
 
+        # Main artists (band/artist on release) — always include
         for a in artists or []:
             name = _name(a)
             if name and name not in seen:
@@ -178,13 +210,17 @@ class DiscogsSource(DataSource):
                 role = (a.get("role") or "").strip()
                 link = artist_link_markdown(name, prefer_url=_artist_url(a))
                 lines.append(f"• {link} — {role}" if role else f"• {link}")
+        # Extra artists — only include if their role is performing musician
         for a in extraartists or []:
             name = _name(a)
-            if name and name not in seen:
-                seen.add(name)
-                role = (a.get("role") or "").strip()
-                link = artist_link_markdown(name, prefer_url=_artist_url(a))
-                lines.append(f"• {link} — {role}" if role else f"• {link}")
+            if not name or name in seen:
+                continue
+            role = (a.get("role") or "").strip()
+            if not self._role_is_musician(role):
+                continue
+            seen.add(name)
+            link = artist_link_markdown(name, prefer_url=_artist_url(a))
+            lines.append(f"• {link} — {role}" if role else f"• {link}")
         if not lines:
             return None
         card_title = "Who's Playing on This Album"
@@ -207,7 +243,8 @@ class DiscogsSource(DataSource):
         artist: str,
         track_title: str,
         album: str,
-        track_id: str
+        track_id: str,
+        **kwargs
     ) -> List[InfoCard]:
         cards = []
         

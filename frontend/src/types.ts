@@ -43,6 +43,7 @@ export type CardSource =
   | 'billboard'
   | 'spotify_data'
   | 'reddit'
+  | 'discussion_search'
   | 'web_search'
   | 'llm';
 

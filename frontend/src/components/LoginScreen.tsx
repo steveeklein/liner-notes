@@ -41,7 +41,11 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     setError(null);
     setIsLoading(true);
     try {
-      const { url } = await auth.getSpotifyLoginUrl();
+      const forceLogin = sessionStorage.getItem('spotify_force_login') === '1';
+      if (forceLogin) sessionStorage.removeItem('spotify_force_login');
+      const returnTo = window.location.origin + (window.location.pathname || '/');
+      const { url } = await auth.getSpotifyLoginUrl(forceLogin, returnTo);
+      // When force_login (after Sign Out), backend returns Spotify logout URL so session is cleared and user must sign in again
       window.location.href = url;
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Could not start Spotify login';

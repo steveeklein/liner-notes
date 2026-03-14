@@ -93,6 +93,7 @@ function getSourceConfig(source: CardSource): { label: string; className: string
     billboard: { label: 'Billboard', className: 'source-billboard' },
     youtube: { label: 'YouTube', className: 'source-youtube' },
     reddit: { label: 'Reddit', className: 'source-reddit' },
+    discussion_search: { label: 'Discussion', className: 'source-discussion' },
     spotify_data: { label: 'Spotify', className: 'source-spotify' },
     setlistfm: { label: 'Setlist.fm', className: 'source-setlistfm' },
     allmusic: { label: 'AllMusic', className: 'source-allmusic' },
