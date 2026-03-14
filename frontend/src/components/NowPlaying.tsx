@@ -8,7 +8,6 @@ interface NowPlayingProps {
   cards: InfoCard[];
   onNewCard: (card: InfoCard) => void;
   onDismissCard: (cardId: string) => void;
-  onBack: () => void;
 }
 
 export function NowPlaying({
@@ -16,7 +15,6 @@ export function NowPlaying({
   cards,
   onNewCard,
   onDismissCard,
-  onBack,
 }: NowPlayingProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const connectedTrackRef = useRef<string | null>(null);
@@ -156,16 +154,6 @@ export function NowPlaying({
           .np-desktop { display: flex !important; }
         }
       `}</style>
-      
-      {/* Back button - always visible */}
-      <button
-        onClick={onBack}
-        style={{ position: 'fixed', top: 8, left: 8, zIndex: 10, width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white', cursor: 'pointer' }}
-      >
-        <svg style={{ width: 20, height: 20 }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-        </svg>
-      </button>
 
       {/* Mobile layout: stacked */}
       <div className="np-mobile">

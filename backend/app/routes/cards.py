@@ -31,6 +31,12 @@ async def register_track(request: RegisterTrackRequest):
     return {"status": "registered", "track_id": request.track_id}
 
 
+def _remove_connection(websocket: WebSocket) -> None:
+    """Remove WebSocket from active connections so it can be garbage-collected."""
+    if websocket in active_card_connections:
+        active_card_connections.remove(websocket)
+
+
 @router.websocket("/ws/{track_id}")
 async def cards_websocket(websocket: WebSocket, track_id: str):
     """
@@ -40,7 +46,7 @@ async def cards_websocket(websocket: WebSocket, track_id: str):
     await websocket.accept()
     active_card_connections.append(websocket)
     print(f"[WS] Card WebSocket connected for track: {track_id}", flush=True)
-    
+
     try:
         card_count = 0
         async for card in card_generator.generate_cards_stream(track_id):
@@ -51,13 +57,14 @@ async def cards_websocket(websocket: WebSocket, track_id: str):
         print(f"[WS] Finished streaming {card_count} cards for track: {track_id}", flush=True)
     except WebSocketDisconnect:
         print(f"[WS] Client disconnected for track: {track_id}", flush=True)
-        if websocket in active_card_connections:
-            active_card_connections.remove(websocket)
     except Exception as e:
         print(f"[WS] Error for track {track_id}: {e}", flush=True)
-        await websocket.send_json({"error": str(e)})
-        if websocket in active_card_connections:
-            active_card_connections.remove(websocket)
+        try:
+            await websocket.send_json({"error": "Card generation failed. Try again."})
+        except Exception:
+            pass
+    finally:
+        _remove_connection(websocket)
 
 
 @router.get("/{track_id}", response_model=List[InfoCard])

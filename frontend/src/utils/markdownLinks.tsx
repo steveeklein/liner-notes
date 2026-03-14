@@ -7,6 +7,12 @@ function trimUrlTrailingPunctuation(url: string): string {
   return url.replace(/[.,;:)!?'"<>]+$/, '');
 }
 
+/** Only allow http/https hrefs to prevent XSS (e.g. javascript:, data:). */
+function isSafeHref(href: string): boolean {
+  const h = href.trim().toLowerCase();
+  return h.startsWith('https://') || h.startsWith('http://');
+}
+
 /** Normalize markdown links: collapse any whitespace (including newlines) between ] and ( so links parse correctly. */
 export function normalizeMarkdownLinks(text: string): string {
   return text.replace(/\]\s*\(/g, '](');
@@ -25,12 +31,17 @@ export function parseMarkdownLinks(text: string): ReactNode[] {
       out.push(normalized.slice(lastIndex, m.index));
     }
     const isMarkdown = !!m[1];
-    let href = isMarkdown ? m[2]! : trimUrlTrailingPunctuation(m[3]!);
-    const label = isMarkdown ? m[1] : href;
+    const rawHref = isMarkdown ? m[2]! : trimUrlTrailingPunctuation(m[3]!);
+    const label = isMarkdown ? m[1] : rawHref;
+    if (!isSafeHref(rawHref)) {
+      out.push(normalized.slice(m.index, re.lastIndex));
+      lastIndex = re.lastIndex;
+      continue;
+    }
     out.push(
       <a
         key={`${m.index}-${String(label).slice(0, 40)}`}
-        href={href}
+        href={rawHref}
         target="_blank"
         rel="noopener noreferrer"
         className={linkClassName}

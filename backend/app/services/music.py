@@ -179,11 +179,13 @@ class SpotifyProvider(MusicProviderInterface):
     """
     Spotify music provider implementation.
     Uses Spotify Web API to control playback on the user's active device.
+    OAuth tokens are persisted in TOKEN_FILE (current directory) so the session
+    survives backend restarts; the file is written with mode 0o600.
     """
-    
+
     BASE_URL = "https://api.spotify.com/v1"
     AUTH_URL = "https://accounts.spotify.com/api/token"
-    TOKEN_FILE = ".spotify_tokens.json"
+    TOKEN_FILE = ".spotify_tokens.json"  # Sensitive; do not commit. Created with 0o600.
     
     def __init__(self):
         self.client_id = os.getenv("SPOTIFY_CLIENT_ID")
@@ -210,16 +212,20 @@ class SpotifyProvider(MusicProviderInterface):
             print(f"[Spotify] Failed to load tokens: {e}", flush=True)
     
     def _save_tokens(self):
-        """Save tokens to file for persistence."""
+        """Save tokens to file for persistence. File is sensitive; restrict to owner read/write."""
         import json
         try:
-            with open(self.TOKEN_FILE, 'w') as f:
-                json.dump({
-                    "access_token": self.access_token,
-                    "refresh_token": self.refresh_token,
-                    "user_name": self.user_name
-                }, f)
-            print(f"[Spotify] Saved tokens to file", flush=True)
+            with open(self.TOKEN_FILE, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "access_token": self.access_token,
+                        "refresh_token": self.refresh_token,
+                        "user_name": self.user_name,
+                    },
+                    f,
+                )
+            os.chmod(self.TOKEN_FILE, 0o600)
+            print("[Spotify] Saved tokens to file", flush=True)
         except Exception as e:
             print(f"[Spotify] Failed to save tokens: {e}", flush=True)
     
@@ -241,8 +247,9 @@ class SpotifyProvider(MusicProviderInterface):
             "response_type": "code",
             "redirect_uri": redirect_uri,
             "scope": " ".join(scopes),
-            "show_dialog": "true",
         }
+        # Do not set show_dialog=true: that forces the consent screen every time.
+        # Without it, Spotify shows consent only on first authorization (or when scopes change).
         return f"https://accounts.spotify.com/authorize?{urlencode(params)}"
     
     async def exchange_code(self, code: str, redirect_uri: str) -> bool:

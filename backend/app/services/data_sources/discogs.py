@@ -4,12 +4,12 @@ import uuid
 import httpx
 
 from app.models import InfoCard, CardSource
-from app.utils.wiki_links import artist_link_markdown
+from app.utils.wiki_links import artist_link_markdown, is_safe_url
 from .base import DataSource
 
 
 def _discogs_profile_to_markdown(profile: str) -> str:
-    """Convert Discogs profile link markup [l=url], [a=id name] to markdown; keep existing links, no Wikipedia added here."""
+    """Convert Discogs profile link markup [l=url], [a=id name] to markdown. Only http(s) URLs are linked."""
     if not profile:
         return profile
 
@@ -17,6 +17,8 @@ def _discogs_profile_to_markdown(profile: str) -> str:
         inner = m.group(1).strip()
         parts = inner.split(None, 1)
         url = parts[0]
+        if not is_safe_url(url):
+            return m.group(0)  # Leave invalid URLs as plain text
         label = parts[1] if len(parts) > 1 else url
         return f"[{label}]({url})"
 
@@ -25,6 +27,7 @@ def _discogs_profile_to_markdown(profile: str) -> str:
         parts = inner.split(None, 1)
         aid = parts[0]
         name = parts[1] if len(parts) > 1 else "Link"
+        # Discogs artist URLs are always https
         return f"[{name}](https://www.discogs.com/artist/{aid})"
 
     out = re.sub(r"\[l=([^\]]+)\]", replace_l, profile)

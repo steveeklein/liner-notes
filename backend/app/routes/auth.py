@@ -8,11 +8,14 @@ router = APIRouter()
 
 
 def get_spotify_redirect_uri(request: Request) -> str:
-    """Build Spotify redirect URI. Must point at the backend (where callback is handled), not the frontend."""
+    """
+    Build Spotify redirect URI. Must point at the backend (where callback is handled), not the frontend.
+    When the request comes via the Vite proxy (Host: localhost:5173), we still register callback on :8000
+    so Spotify redirects to the backend after the user authorizes.
+    """
     base_url = os.getenv("BASE_URL")
     if not base_url:
         host = request.headers.get("host", "127.0.0.1:8000")
-        # If request came via frontend proxy (port 5173), use backend port 8000 for callback
         if ":5173" in host:
             host = host.replace(":5173", ":8000")
         if "localhost" in host:
