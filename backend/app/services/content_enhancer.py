@@ -37,7 +37,7 @@ class ContentEnhancer:
             # Combine all available content for the LLM
             original_content = card.full_content or card.summary
             
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=20.0) as client:
                 response = await client.post(
                     self.base_url,
                     headers={

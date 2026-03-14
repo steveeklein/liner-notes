@@ -45,11 +45,14 @@ async def get_playback_state():
     
     # Register track info for card generation
     if state.current_track:
+        album = state.current_track.album or ""
+        if not album:
+            print(f"[Playback] Track has no album: {state.current_track.artist} - {state.current_track.title} (album/song cards may be limited)", flush=True)
         card_generator.set_track_info(
             track_id=state.current_track.id,
             artist=state.current_track.artist,
             title=state.current_track.title,
-            album=state.current_track.album or ""
+            album=album
         )
     
     return state

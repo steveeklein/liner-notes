@@ -82,8 +82,8 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
           </div>
         </div>
         
-        {/* Action buttons - only show when expanded */}
-        {isExpanded && card.url && (
+        {/* Link to source: always show for Reddit/discussions; for others show when expanded */}
+        {card.url && (isExpanded || card.source === 'reddit') && (
           <div className="flex items-center gap-2 mt-4 pt-3 border-t border-white/10">
             <a
               href={card.url}

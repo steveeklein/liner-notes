@@ -113,28 +113,36 @@ export function NowPlaying({
         <div className="flex flex-col gap-4">
           {sections.map(section => {
             const sectionCards = getCardsForSection(section.id);
-            const visibleCard = sectionCards[0]; // Show only first card
-            const remainingCount = sectionCards.length - 1;
-            
-            if (!visibleCard) return null;
-            
+            const showEmptyNote = streamDone && sectionCards.length === 0 && (section.id === 'album' || section.id === 'song');
+            if (sectionCards.length === 0 && !showEmptyNote) return null;
+
             return (
               <div key={section.id}>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wide">
                     {section.label}
                   </h3>
-                  {remainingCount > 0 && (
+                  {sectionCards.length > 1 && (
                     <span className="text-xs text-gray-600">
-                      +{remainingCount} more
+                      {sectionCards.length} cards
                     </span>
                   )}
                 </div>
-                <InfoCardComponent
-                  key={visibleCard.id}
-                  card={visibleCard}
-                  onDismiss={() => onDismissCard(visibleCard.id)}
-                />
+                <div className="flex flex-col gap-3">
+                  {sectionCards.length > 0 ? (
+                    sectionCards.map(card => (
+                      <InfoCardComponent
+                        key={card.id}
+                        card={card}
+                        onDismiss={() => onDismissCard(card.id)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-gray-500 text-xs py-2">
+                      {section.id === 'album' ? 'No album info found for this track.' : 'No song info found for this track.'}
+                    </p>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -174,7 +182,7 @@ export function NowPlaying({
           <div style={{ textAlign: 'center' }}>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{track.title}</h1>
             <p style={{ margin: '6px 0 0 0', fontSize: 17, color: '#9ca3af' }}>{track.artist}</p>
-            {track.album && <p style={{ margin: '4px 0 0 0', fontSize: 14, color: '#6b7280' }}>{track.album}</p>}
+            <p style={{ margin: '4px 0 0 0', fontSize: 14, color: '#6b7280' }}>{track.album || '—'}</p>
             {cards.length > 0 && (
               <p style={{ margin: '10px 0 0 0', fontSize: 13, color: '#6366f1', fontWeight: 500 }}>{cards.length} liner notes</p>
             )}
@@ -207,7 +215,7 @@ export function NowPlaying({
           <div style={{ textAlign: 'center' }}>
             <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'white', lineHeight: 1.3 }}>{track.title}</h1>
             <p style={{ margin: '8px 0 0 0', fontSize: 18, color: '#9ca3af' }}>{track.artist}</p>
-            {track.album && <p style={{ margin: '4px 0 0 0', fontSize: 16, color: '#6b7280' }}>{track.album}</p>}
+            <p style={{ margin: '4px 0 0 0', fontSize: 16, color: '#6b7280' }}>{track.album || '—'}</p>
             {cards.length > 0 && (
               <p style={{ margin: '12px 0 0 0', fontSize: 14, color: '#6366f1', fontWeight: 500 }}>{cards.length} liner notes</p>
             )}

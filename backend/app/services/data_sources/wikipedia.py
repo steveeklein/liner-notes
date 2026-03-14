@@ -82,30 +82,60 @@ Which Wikipedia page title matches this context best?"""
         
         return None
     
+    def _page_looks_like_music(self, page_text: str) -> bool:
+        """Heuristic: page is about a band/artist if it mentions music-related terms early."""
+        if not page_text or len(page_text) < 100:
+            return False
+        lower = page_text[:2000].lower()
+        music_terms = ("band", "album", "music", "song", "singer", "guitar", "drummer", "bass", "recorded", "released", "musician", "rock", "pop", "genre")
+        return any(term in lower for term in music_terms)
+
+    def _page_looks_like_non_music_topic(self, page_text: str) -> bool:
+        """Reject pages that are clearly about something other than a band/artist (e.g. Sugar the food)."""
+        if not page_text or len(page_text) < 50:
+            return False
+        lower = page_text[:1500].lower()
+        non_music_indicators = (
+            "edible substances", "class of edible", "sweetener", "carbohydrate",
+            "crystalline sugar", "table sugar", "sucrose", "fructose",
+            "caloric sweetener", "sugar (food)", "culinary"
+        )
+        return any(ind in lower for ind in non_music_indicators)
+
     async def _get_page_with_disambiguation(self, search_terms: List[str], artist: str, album: str, track: str, content_check: str = None) -> Optional[tuple]:
         """Try search terms, handling disambiguation pages."""
         for search_term in search_terms:
             page = self.wiki.page(search_term)
             if not page.exists():
                 continue
-            
+
             # Check if it's a disambiguation page
-            if self._is_disambiguation(page.text):
+            if self._is_disambiguation(page.text or ""):
                 print(f"[Wikipedia] Found disambiguation for '{search_term}', resolving...", flush=True)
-                resolved_title = await self._resolve_disambiguation(page.text, artist, album, track)
+                resolved_title = await self._resolve_disambiguation(page.text or "", artist, album, track)
                 if resolved_title:
                     resolved_page = self.wiki.page(resolved_title)
-                    if resolved_page.exists():
+                    if resolved_page.exists() and not self._page_looks_like_non_music_topic(resolved_page.text or ""):
                         print(f"[Wikipedia] Resolved to: {resolved_title}", flush=True)
                         return (resolved_page, resolved_title)
                 continue
-            
-            # Check content requirements if specified
-            if content_check and content_check not in page.text.lower()[:500]:
+
+            # For bare artist name (no "band"/"musician" in term), require page to look like music to avoid e.g. "Sugar" → sugar (food)
+            if search_term == artist and not self._page_looks_like_music(page.text or ""):
+                print(f"[Wikipedia] Skipping '{search_term}' — page doesn't look like music/artist", flush=True)
                 continue
-            
+
+            # Reject pages that are clearly about a non-music topic (food, compound, etc.)
+            if self._page_looks_like_non_music_topic(page.text or ""):
+                print(f"[Wikipedia] Skipping '{search_term}' — page looks like non-music topic (e.g. food/compound)", flush=True)
+                continue
+
+            # Check content requirements if specified
+            if content_check and content_check not in (page.text or "").lower()[:500]:
+                continue
+
             return (page, search_term)
-        
+
         return None
     
     def _format_summary(self, text: str, max_length: int = 500) -> str:
@@ -174,9 +204,9 @@ Which Wikipedia page title matches this context best?"""
     ) -> List[InfoCard]:
         cards = []
         
-        # Artist page
+        # Artist page — try (band) and (musician) first so we don't match "Sugar" → sugar (food), "Kiss" → kiss (act), etc.
         artist_result = await self._get_page_with_disambiguation(
-            [artist, f"{artist} (musician)", f"{artist} (band)"],
+            [f"{artist} (band)", f"{artist} (musician)", f"{artist} (singer)", artist],
             artist, album, track_title
         )
         if artist_result:

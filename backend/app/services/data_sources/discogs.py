@@ -187,9 +187,7 @@ class DiscogsSource(DataSource):
                 lines.append(f"• {link} — {role}" if role else f"• {link}")
         if not lines:
             return None
-        genres = (genre or []) + (style or [])
-        is_jazz = any("jazz" in (g or "").lower() for g in genres)
-        card_title = "Who's Playing on This Album" if is_jazz else "Album Personnel"
+        card_title = "Who's Playing on This Album"
         summary = "\n".join(lines[:25])
         if len(lines) > 25:
             summary += f"\n… and {len(lines) - 25} more"
