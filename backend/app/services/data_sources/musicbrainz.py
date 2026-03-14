@@ -4,6 +4,7 @@ import httpx
 import asyncio
 
 from app.models import InfoCard, CardSource
+from app.utils.wiki_links import artist_link_markdown
 from .base import DataSource
 
 
@@ -125,12 +126,18 @@ class MusicBrainzSource(DataSource):
             if details:
                 artist_credits = details.get("artist-credit", [])
                 if len(artist_credits) > 1:
-                    performers = [ac.get("name") for ac in artist_credits if ac.get("name")]
+                    def _mb_artist_url(ac: dict) -> str | None:
+                        aid = (ac.get("artist") or {}).get("id") or ac.get("id")
+                        return f"https://musicbrainz.org/artist/{aid}" if aid else None
+                    performer_links = [
+                        artist_link_markdown(ac.get("name"), prefer_url=_mb_artist_url(ac))
+                        for ac in artist_credits if ac.get("name")
+                    ]
                     cards.append(InfoCard(
                         id=str(uuid.uuid4()),
                         source=CardSource.MUSICBRAINZ,
                         title="Featured Artists",
-                        summary=f"Performed by: {', '.join(performers)}",
+                        summary=f"Performed by: {', '.join(performer_links)}",
                         url=f"https://musicbrainz.org/recording/{recording_id}",
                         track_id=track_id,
                         category="credits"
@@ -139,16 +146,23 @@ class MusicBrainzSource(DataSource):
                 relations = details.get("relations", [])
                 writers = []
                 producers = []
+                def _mb_rel_artist_url(rel: dict) -> str | None:
+                    aid = (rel.get("artist") or {}).get("id")
+                    return f"https://musicbrainz.org/artist/{aid}" if aid else None
+
                 for rel in relations:
                     rel_type = rel.get("type", "")
+                    artist_info = rel.get("artist", {})
                     if rel_type in ["writer", "composer", "lyricist"]:
-                        artist_info = rel.get("artist", {})
                         if artist_info.get("name"):
-                            writers.append(f"{artist_info['name']} ({rel_type})")
+                            writers.append(
+                                f"{artist_link_markdown(artist_info['name'], prefer_url=_mb_rel_artist_url(rel))} ({rel_type})"
+                            )
                     elif rel_type == "producer":
-                        artist_info = rel.get("artist", {})
                         if artist_info.get("name"):
-                            producers.append(artist_info["name"])
+                            producers.append(
+                                artist_link_markdown(artist_info["name"], prefer_url=_mb_rel_artist_url(rel))
+                            )
                 
                 if writers:
                     cards.append(InfoCard(

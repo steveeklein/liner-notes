@@ -47,6 +47,7 @@ async def cards_websocket(websocket: WebSocket, track_id: str):
             card_count += 1
             print(f"[WS] Sending card {card_count}: {card.source.value} - {card.title}", flush=True)
             await websocket.send_json(card.model_dump())
+        await websocket.send_json({"done": True, "count": card_count})
         print(f"[WS] Finished streaming {card_count} cards for track: {track_id}", flush=True)
     except WebSocketDisconnect:
         print(f"[WS] Client disconnected for track: {track_id}", flush=True)

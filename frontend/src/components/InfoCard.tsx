@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { InfoCard, CardSource } from '../types';
+import { parseMarkdownLinks, normalizeMarkdownLinks, renderWithLineBreaks } from '../utils/markdownLinks';
 
 interface InfoCardComponentProps {
   card: InfoCard;
@@ -13,7 +14,8 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
   
   const hasMoreContent = card.full_content && card.full_content.length > card.summary.length;
   const showReadMore = hasMoreContent || card.summary.length > 150;
-  const displayContent = isExpanded && card.full_content ? card.full_content : card.summary;
+  const rawContent = isExpanded && card.full_content ? card.full_content : card.summary;
+  const displayContent = normalizeMarkdownLinks(rawContent);
 
   return (
     <div
@@ -55,12 +57,7 @@ export function InfoCardComponent({ card, onDismiss, style }: InfoCardComponentP
             <div className={`text-sm text-gray-300 leading-relaxed ${isExpanded ? '' : 'line-clamp-4'}`}>
               {displayContent.split('\n\n').map((paragraph, i) => (
                 <p key={i} className={i > 0 ? 'mt-4' : ''}>
-                  {paragraph.split('\n').map((line, j) => (
-                    <span key={j}>
-                      {line}
-                      {j < paragraph.split('\n').length - 1 && <br />}
-                    </span>
-                  ))}
+                  {renderWithLineBreaks(parseMarkdownLinks(paragraph))}
                 </p>
               ))}
             </div>

@@ -40,6 +40,8 @@ async def playback_websocket(websocket: WebSocket):
 async def get_playback_state():
     """Get current playback state."""
     state = await music_service.get_playback_state()
+    if not state.current_track:
+        print("[Playback] Returning state with no track — see [Spotify] logs above for API response", flush=True)
     
     # Register track info for card generation
     if state.current_track:

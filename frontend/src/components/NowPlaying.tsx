@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cards as cardsApi } from '../api';
 import { InfoCardComponent } from './InfoCard';
 import type { Track, InfoCard } from '../types';
@@ -20,51 +20,51 @@ export function NowPlaying({
 }: NowPlayingProps) {
   const wsRef = useRef<WebSocket | null>(null);
   const connectedTrackRef = useRef<string | null>(null);
+  const [streamDone, setStreamDone] = useState(false);
 
   useEffect(() => {
     if (!track.id) return;
-    
-    // Always connect for a new track
-    const isNewTrack = connectedTrackRef.current !== track.id;
+    const trackId = track.id;
+    setStreamDone(false);
+
+    const isNewTrack = connectedTrackRef.current !== trackId;
     const isConnected = wsRef.current?.readyState === WebSocket.OPEN;
-    
+
     if (!isNewTrack && isConnected) {
       return;
     }
 
-    console.log(`[WS] Connecting for track: ${track.id} (was: ${connectedTrackRef.current})`);
-    
-    // Close existing connection
+    console.log(`[WS] Connecting for track: ${trackId} (was: ${connectedTrackRef.current})`);
+
     if (wsRef.current) {
       wsRef.current.close();
       wsRef.current = null;
     }
-    
-    // Register track with backend first, then connect WebSocket
+    connectedTrackRef.current = trackId;
+
     const connectCards = async () => {
       try {
-        // Register track info with backend to ensure card generator has it
         await cardsApi.registerTrack(track);
         console.log(`[WS] Track registered: ${track.title}`);
       } catch (err) {
         console.error('[WS] Failed to register track:', err);
       }
-      
-      connectedTrackRef.current = track.id;
+      if (connectedTrackRef.current !== trackId) return;
       wsRef.current = cardsApi.connectWebSocket(
-        track.id,
+        trackId,
         (card) => {
-          console.log(`[WS] Received card: ${card.source} - ${card.title}`);
-          onNewCard(card);
+          if (connectedTrackRef.current === trackId) onNewCard(card);
         },
-        (error) => console.error('[WS] Error:', error)
+        (error) => console.error('[WS] Error:', error),
+        (count) => {
+          if (connectedTrackRef.current === trackId) setStreamDone(true);
+        }
       );
     };
-    
+
     connectCards();
 
     return () => {
-      console.log(`[WS] Cleanup for track: ${connectedTrackRef.current}`);
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -96,13 +96,20 @@ export function NowPlaying({
 
   const cardsContent = (
     <>
-      {cards.length === 0 ? (
+      {cards.length === 0 && !streamDone ? (
         <div className="text-center py-8">
           <div className="w-12 h-12 rounded-full bg-[#252525] flex items-center justify-center mx-auto mb-3">
             <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
           </div>
           <p className="text-gray-400 text-sm">Loading liner notes...</p>
           <p className="text-gray-500 text-xs mt-1">Fetching from multiple sources</p>
+        </div>
+      ) : cards.length === 0 && streamDone ? (
+        <div className="text-center py-8 px-4">
+          <p className="text-gray-400 text-sm">No liner notes found for this track.</p>
+          <p className="text-gray-500 text-xs mt-2 max-w-sm mx-auto">
+            Add API keys in backend <code className="bg-[#252525] px-1 rounded">.env</code> for more sources (Last.fm, Genius, GROQ, etc.). See README.
+          </p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
@@ -187,6 +194,9 @@ export function NowPlaying({
         </div>
         <div style={{ background: '#1a1a1a', padding: '16px 16px 32px 16px' }}>
           {cardsContent}
+          {streamDone && cards.length > 0 && cards.length < 4 && (
+            <p className="text-gray-500 text-xs mt-4 text-center">Add API keys (Last.fm, Genius, GROQ) in backend .env for more sources.</p>
+          )}
         </div>
       </div>
 
@@ -217,8 +227,18 @@ export function NowPlaying({
         </div>
         <div style={{ flex: 1, background: '#1a1a1a', padding: '24px 24px 48px 24px' }}>
           {cardsContent}
+          {streamDone && cards.length > 0 && cards.length < 4 && (
+            <p className="text-gray-500 text-xs mt-4 text-center">
+              Add API keys (Last.fm, Genius, GROQ) in backend .env for more sources.
+            </p>
+          )}
         </div>
       </div>
+      {streamDone && cards.length > 0 && cards.length < 4 && (
+        <p className="text-gray-500 text-xs py-4 text-center bg-[#0f0f0f]">
+          Add API keys (Last.fm, Genius, GROQ) in backend .env for more sources.
+        </p>
+      )}
     </div>
   );
 }

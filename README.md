@@ -50,24 +50,33 @@ cp .env.example .env
 # For Spotify: Add SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET
 # Get these at https://developer.spotify.com/dashboard
 # Add redirect URI: http://localhost:8000/api/auth/spotify/callback
-
-# Run the server
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Frontend Setup
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Run development server
-npm run dev
 ```
 
-Visit `http://localhost:5173` on your phone or desktop.
+### Run both with hot reload
+
+From the **project root** (after backend venv and frontend deps are installed):
+
+```bash
+npm install          # installs concurrently
+npm run dev          # starts backend + frontend; both auto-restart on file changes
+```
+
+- **Backend**: restarts when any file under `backend/app` changes (uvicorn `--reload`).
+- **Frontend**: Vite HMR updates the browser on change; the dev server does not need a full restart.
+
+To run only one:
+
+- Backend: `npm run dev:backend` (from root; on Windows run from `backend/` with venv activated: `uvicorn app.main:app --reload --reload-dir app --host 0.0.0.0 --port 8000`)
+- Frontend: `npm run dev:frontend` or `cd frontend && npm run dev`
+
+Visit `http://localhost:5173` on your phone or desktop. Local dev uses HTTP only (no self-signed cert needed).
 
 ### Installing as PWA
 
@@ -77,18 +86,20 @@ Visit `http://localhost:5173` on your phone or desktop.
 
 ## API Keys (Optional)
 
-Most data sources work without API keys via web scraping. For better reliability and rate limits, you can add:
+Most data sources work without API keys via web scraping. For **more liner notes** (artist bios, lyrics, AI insights), add keys to `backend/.env`:
 
-| Service | Get Key At |
-|---------|------------|
-| OpenAI | https://platform.openai.com/api-keys |
-| Last.fm | https://www.last.fm/api/account/create |
-| Genius | https://genius.com/api-clients |
-| Discogs | https://www.discogs.com/settings/developers |
-| YouTube | https://console.cloud.google.com/apis/credentials |
-| Spotify | https://developer.spotify.com/dashboard |
-| Setlist.fm | https://api.setlist.fm/docs |
-| SerpAPI | https://serpapi.com |
+| Service | Get Key At | What it adds |
+|---------|------------|---------------|
+| **GROQ** | https://console.groq.com | AI-generated artist/album/song insights (free tier) |
+| Last.fm | https://www.last.fm/api/account/create | Listening stats, similar artists |
+| Genius | https://genius.com/api-clients | Lyrics and annotations |
+| Discogs | https://www.discogs.com/settings/developers | Vinyl/credits |
+| YouTube | https://console.cloud.google.com/apis/credentials | Music videos |
+| Spotify | https://developer.spotify.com/dashboard | Required for playback |
+| Setlist.fm | https://api.setlist.fm/docs | Concert setlists |
+| SerpAPI | https://serpapi.com | Web search fallback |
+
+**Why so few cards?** Without API keys, only free sources (Wikipedia, MusicBrainz, scraping) run. Obscure or very new tracks may have little data. Add **GROQ_API_KEY** in `backend/.env` for instant AI insights; add others for more sources. Check backend logs for `[Cards] X returned N cards` to see which sources returned data.
 
 ## Architecture
 
@@ -126,11 +137,12 @@ liner-notes/
 ## Development
 
 ```bash
-# Run backend in development mode
-cd backend && uvicorn app.main:app --reload
+# Run both with hot reload (from project root)
+npm run dev
 
-# Run frontend in development mode
-cd frontend && npm run dev
+# Or run separately:
+npm run dev:backend   # backend only, restarts on backend/app changes
+npm run dev:frontend  # frontend only, Vite HMR
 
 # Build for production
 cd frontend && npm run build

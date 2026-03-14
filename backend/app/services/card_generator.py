@@ -136,6 +136,8 @@ class CardGenerator:
             return "artist"
         if card.category == "album":
             return "album"
+        if card.category == "credits" and ("personnel" in card.title.lower() or "playing on" in card.title.lower()):
+            return "album"
         if card.category in ["reviews", "trivia", "similar", "concerts", "videos"]:
             return "discussions"
         if card.source == CardSource.REDDIT:
@@ -180,16 +182,17 @@ class CardGenerator:
                     # This also assigns sections via LLM
                     if cards and source_type != CardSource.LLM:
                         for i, card in enumerate(cards):
-                            if len(card.summary) >= 150:
+                            # Skip enhancement for credits (personnel, featured artists, etc.) so markdown links are preserved
+                            if card.category == "credits":
+                                cards[i].section = self._assign_default_section(card)
+                            elif len(card.summary) >= 150:
                                 try:
                                     cards[i] = await content_enhancer.enhance_card(card)
                                     print(f"[Cards] Enhanced card from {source_type.value}", flush=True)
                                 except Exception as e:
                                     print(f"[Cards] Enhancement failed: {e}", flush=True)
-                                    # Assign default section on failure
                                     cards[i].section = self._assign_default_section(card)
                             else:
-                                # Assign default section for short cards
                                 cards[i].section = self._assign_default_section(card)
                     else:
                         # Assign default sections for LLM-generated cards
@@ -279,6 +282,7 @@ class CardGenerator:
             key=lambda c: c.relevance_score, 
             reverse=True
         )
+        print(f"[Cards] Done: {len(cached_cards)} cards for {artist} - {title}", flush=True)
     
     async def get_cards(
         self, 

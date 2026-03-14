@@ -8,15 +8,17 @@ router = APIRouter()
 
 
 def get_spotify_redirect_uri(request: Request) -> str:
-    """Build Spotify redirect URI from request."""
+    """Build Spotify redirect URI. Must point at the backend (where callback is handled), not the frontend."""
     base_url = os.getenv("BASE_URL")
     if not base_url:
-        # Use 127.0.0.1 for local development (Spotify requires this format)
         host = request.headers.get("host", "127.0.0.1:8000")
+        # If request came via frontend proxy (port 5173), use backend port 8000 for callback
+        if ":5173" in host:
+            host = host.replace(":5173", ":8000")
         if "localhost" in host:
             host = host.replace("localhost", "127.0.0.1")
         base_url = f"http://{host}"
-    return f"{base_url}/api/auth/spotify/callback"
+    return f"{base_url.rstrip('/')}/api/auth/spotify/callback"
 
 
 def get_frontend_url() -> str:
@@ -50,12 +52,30 @@ async def login(request: LoginRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def _get_spotify_auth_url(request: Request) -> str:
+    """Build Spotify OAuth URL; raises HTTPException if client not configured."""
+    spotify = music_service.providers.get(MusicProvider.SPOTIFY)
+    if not spotify or not getattr(spotify, "client_id", None) or not getattr(spotify, "client_secret", None):
+        raise HTTPException(
+            status_code=503,
+            detail="Spotify is not configured. Set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in backend .env (see README)."
+        )
+    redirect_uri = get_spotify_redirect_uri(request)
+    return music_service.get_spotify_auth_url(redirect_uri)
+
+
 @router.get("/spotify/login")
 async def spotify_login(request: Request):
-    """Initiate Spotify OAuth flow."""
-    redirect_uri = get_spotify_redirect_uri(request)
-    auth_url = music_service.get_spotify_auth_url(redirect_uri)
+    """Initiate Spotify OAuth flow (redirect)."""
+    auth_url = _get_spotify_auth_url(request)
     return RedirectResponse(url=auth_url)
+
+
+@router.get("/spotify/url")
+async def spotify_auth_url(request: Request):
+    """Return Spotify authorize URL. After user approves, Spotify redirects to our callback, then we send them to the app."""
+    auth_url = _get_spotify_auth_url(request)
+    return {"url": auth_url}
 
 
 @router.get("/spotify/callback")

@@ -101,11 +101,24 @@ class RedditSource(DataSource):
                     short_title = title[:60] + "..." if len(title) > 60 else title
                     
                     if short_title not in existing_titles:
+                        selftext = (post.get("selftext") or "").strip()
+                        meta = f"r/{post.get('subreddit')} · {score} upvotes · {post.get('num_comments', 0)} comments"
+                        if selftext:
+                            # Show post body: summary = first 400 chars, full_content = full body
+                            summary = selftext[:400].rstrip()
+                            if len(selftext) > 400:
+                                summary += "..."
+                            summary = f"{meta}\n\n{summary}"
+                            full_content = f"{meta}\n\n{selftext}"
+                        else:
+                            summary = meta
+                            full_content = meta
                         cards.append(InfoCard(
                             id=str(uuid.uuid4()),
                             source=CardSource.REDDIT,
                             title=short_title,
-                            summary=f"r/{post.get('subreddit')} • {score} upvotes • {post.get('num_comments', 0)} comments",
+                            summary=summary,
+                            full_content=full_content,
                             url=f"https://reddit.com{post.get('permalink', '')}",
                             track_id=track_id,
                             category="trivia"

@@ -17,6 +17,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const lastTrackIdRef = useRef<string | null>(null);
+  const activeScreenRef = useRef<Screen>(activeScreen);
+  activeScreenRef.current = activeScreen;
 
   useEffect(() => {
     auth.getStatus()
@@ -34,20 +36,24 @@ function App() {
     const pollPlayback = async () => {
       try {
         const state = await playback.getState();
-        
-        if (state.current_track && state.is_playing) {
-          // New track detected
-          if (state.current_track.id !== lastTrackIdRef.current) {
-            console.log(`[Poll] New track detected: ${state.current_track.title} by ${state.current_track.artist}`);
-            console.log(`[Poll] Track ID changed: ${lastTrackIdRef.current} -> ${state.current_track.id}`);
+        if (!state.current_track && state.is_playing === false) {
+          console.log('[Poll] Playback state: no track (play something in Spotify to see it here)');
+        }
+        if (state.current_track) {
+          const isNewTrack = state.current_track.id !== lastTrackIdRef.current;
+          if (isNewTrack) {
             lastTrackIdRef.current = state.current_track.id;
             setCurrentTrack(state.current_track);
-            setCards([]); // Clear cards for new track
+            setCards([]);
             setActiveScreen('now-playing');
           }
-          setIsListening(true);
+          setIsListening(state.is_playing);
         } else {
+          lastTrackIdRef.current = null;
+          setCurrentTrack(null);
+          setCards([]);
           setIsListening(false);
+          if (activeScreenRef.current === 'now-playing') setActiveScreen('home');
         }
       } catch (err) {
         console.error('Playback poll error:', err);
@@ -55,9 +61,9 @@ function App() {
       }
     };
 
-    // Poll every 3 seconds
+    // Poll every 2 seconds so track changes update quickly
     pollPlayback();
-    pollInterval = setInterval(pollPlayback, 3000);
+    pollInterval = setInterval(pollPlayback, 2000);
 
     return () => clearInterval(pollInterval);
   }, [authStatus?.authenticated]);
@@ -146,6 +152,7 @@ function App() {
       <main className="flex-1 overflow-hidden">
         {activeScreen === 'now-playing' && currentTrack ? (
           <NowPlaying
+            key={currentTrack.id}
             track={currentTrack}
             cards={cards}
             onNewCard={handleNewCard}

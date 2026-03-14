@@ -1,4 +1,5 @@
 import type { InfoCard, CardSource } from '../types';
+import { parseMarkdownLinks, normalizeMarkdownLinks, renderWithLineBreaks } from '../utils/markdownLinks';
 
 interface CardDetailProps {
   card: InfoCard;
@@ -55,7 +56,7 @@ export function CardDetail({ card, onClose }: CardDetailProps) {
           <h2 className="text-xl font-bold mb-3">{card.title}</h2>
           
           <div className="text-gray-300 leading-relaxed whitespace-pre-wrap">
-            {card.full_content || card.summary}
+            {renderWithLineBreaks(parseMarkdownLinks(normalizeMarkdownLinks(card.full_content || card.summary)))}
           </div>
         </div>
 

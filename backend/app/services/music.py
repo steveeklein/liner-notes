@@ -364,6 +364,9 @@ class SpotifyProvider(MusicProviderInterface):
                     print(f"[Spotify] API data keys: {list(data.keys()) if isinstance(data, dict) else 'not a dict'}", flush=True)
                     return data
                 elif response.status_code == 204:
+                    # 204 = no content = nothing currently playing in Spotify
+                    if "currently-playing" in endpoint:
+                        print("[Spotify] No currently playing: Spotify returned 204. Play something in the Spotify app (phone, desktop, or web).", flush=True)
                     return {}
                 else:
                     print(f"[Spotify] API error response: {response.text[:500]}", flush=True)
@@ -395,41 +398,77 @@ class SpotifyProvider(MusicProviderInterface):
             os.remove(self.TOKEN_FILE)
             print("[Spotify] Removed token file", flush=True)
     
-    async def get_playback_state(self) -> PlaybackState:
-        """Get current playback state from Spotify."""
-        # Try currently-playing endpoint first (works more reliably)
-        data = await self._api_request("GET", "/me/player/currently-playing")
-        
-        if data and data.get("item"):
-            item = data["item"]
-            artists = ", ".join(a["name"] for a in item.get("artists", []))
-            album = item.get("album", {})
-            
-            images = album.get("images", [])
-            cover_url = images[0]["url"] if images else None
-            
-            self.current_track = Track(
-                id=item["id"],
-                title=item["name"],
-                artist=artists,
-                album=album.get("name", ""),
-                duration=item.get("duration_ms", 0) // 1000,
-                cover_url=cover_url,
-                provider=MusicProvider.SPOTIFY
-            )
+    def _parse_spotify_item_to_state(self, data: dict) -> PlaybackState:
+        """Parse Spotify API response (from currently-playing or player) into PlaybackState. Handles track or episode."""
+        item = data["item"]
+        item_type = item.get("type", "track")
+        try:
+            if item_type == "episode":
+                show = item.get("show", {})
+                artist = show.get("name", "Podcast")
+                images = item.get("images", []) or show.get("images", [])
+                cover_url = images[0]["url"] if images else None
+                self.current_track = Track(
+                    id=item["id"],
+                    title=item.get("name", ""),
+                    artist=artist,
+                    album=show.get("name", ""),
+                    duration=item.get("duration_ms", 0) // 1000,
+                    cover_url=cover_url,
+                    provider=MusicProvider.SPOTIFY
+                )
+            else:
+                artists = ", ".join(a["name"] for a in item.get("artists", []))
+                album = item.get("album", {})
+                images = album.get("images", [])
+                cover_url = images[0]["url"] if images else None
+                self.current_track = Track(
+                    id=item["id"],
+                    title=item["name"],
+                    artist=artists,
+                    album=album.get("name", ""),
+                    duration=item.get("duration_ms", 0) // 1000,
+                    cover_url=cover_url,
+                    provider=MusicProvider.SPOTIFY
+                )
             self.is_playing = data.get("is_playing", False)
-            
             return PlaybackState(
                 is_playing=self.is_playing,
                 current_track=self.current_track,
                 position=data.get("progress_ms", 0) // 1000
             )
-        
-        return PlaybackState(
-            is_playing=self.is_playing,
-            current_track=self.current_track,
-            position=0
-        )
+        except Exception as e:
+            print(f"[Spotify] Parse error for item type={item_type}: {e}", flush=True)
+            raise
+
+    async def get_playback_state(self) -> PlaybackState:
+        """Get current playback state from Spotify. Tries both endpoints (Spotify sometimes returns 204 even when playing)."""
+        # Don't use additional_types=track so we get both tracks and episodes
+        data = await self._api_request("GET", "/me/player/currently-playing")
+        has_item = data and data.get("item")
+        print(f"[Spotify] currently-playing: {'item OK' if has_item else 'no item' + (' (no data)' if not data else '')}", flush=True)
+        if has_item:
+            return self._parse_spotify_item_to_state(data)
+
+        data = await self._api_request("GET", "/me/player")
+        has_item = data and data.get("item")
+        print(f"[Spotify] /me/player: {'item OK' if has_item else 'no item' + (' (no data)' if not data else '')}", flush=True)
+        if has_item:
+            return self._parse_spotify_item_to_state(data)
+
+        await asyncio.sleep(1.0)
+        data = await self._api_request("GET", "/me/player")
+        has_item = data and data.get("item")
+        print(f"[Spotify] /me/player retry: {'item OK' if has_item else 'no item' + (' (no data)' if not data else '')}", flush=True)
+        if has_item:
+            return self._parse_spotify_item_to_state(data)
+
+        # No item from API: don't return stale cache so the frontend can update when the new track appears
+        self.current_track = None
+        self.is_playing = False
+        if not data:
+            print("[Spotify] No playback from API. Same account in Spotify app and Liner Notes? Try: play from Liner Notes Search, or restart Spotify app.", flush=True)
+        return PlaybackState(is_playing=False, current_track=None, position=0)
     
     async def play_track(self, track_id: str) -> bool:
         """Play a track on the user's active Spotify device."""
@@ -703,6 +742,16 @@ class MusicService:
             return self.providers[self.active_provider]
         return None
     
+    def _restore_session_from_tokens(self) -> None:
+        """Restore active_provider from persisted tokens (e.g. after page refresh or backend restart)."""
+        if self.active_provider is not None:
+            return
+        spotify = self.providers[MusicProvider.SPOTIFY]
+        if getattr(spotify, "access_token", None):
+            self.active_provider = MusicProvider.SPOTIFY
+            self.username = getattr(spotify, "user_name", None) or "Spotify"
+            print("[Auth] Restored session from Spotify tokens", flush=True)
+    
     async def login(self, provider: MusicProvider, username: str, password: str) -> bool:
         success = await self.providers[provider].login(username, password)
         if success:
@@ -717,6 +766,7 @@ class MusicService:
         self.username = None
     
     def get_auth_status(self) -> AuthStatus:
+        self._restore_session_from_tokens()
         return AuthStatus(
             authenticated=self.active_provider is not None,
             provider=self.active_provider,

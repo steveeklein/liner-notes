@@ -39,6 +39,9 @@ export const auth = {
   logout: () => fetchAPI<{ status: string }>('/auth/logout', { method: 'POST' }),
 
   getStatus: () => fetchAPI<AuthStatus>('/auth/status'),
+
+  /** Get Spotify OAuth URL and redirect there (avoids full-page nav proxy issues). */
+  getSpotifyLoginUrl: () => fetchAPI<{ url: string }>('/auth/spotify/url'),
 };
 
 export const playback = {
@@ -91,7 +94,8 @@ export const cards = {
   connectWebSocket: (
     trackId: string,
     onCard: (card: InfoCard) => void,
-    onError?: (error: Event) => void
+    onError?: (error: Event) => void,
+    onDone?: (count: number) => void
   ) => {
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsHost = window.location.host;
@@ -112,6 +116,8 @@ export const cards = {
         const data = JSON.parse(event.data);
         if (data.error) {
           console.error('[API] Card WebSocket error:', data.error);
+        } else if (data.done === true) {
+          onDone?.(data.count ?? 0);
         } else {
           onCard(data as InfoCard);
         }

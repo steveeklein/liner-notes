@@ -1,9 +1,35 @@
-from typing import List
+from typing import List, Optional
+import re
 import uuid
 import httpx
 
 from app.models import InfoCard, CardSource
+from app.utils.wiki_links import artist_link_markdown
 from .base import DataSource
+
+
+def _discogs_profile_to_markdown(profile: str) -> str:
+    """Convert Discogs profile link markup [l=url], [a=id name] to markdown; keep existing links, no Wikipedia added here."""
+    if not profile:
+        return profile
+
+    def replace_l(m: re.Match) -> str:
+        inner = m.group(1).strip()
+        parts = inner.split(None, 1)
+        url = parts[0]
+        label = parts[1] if len(parts) > 1 else url
+        return f"[{label}]({url})"
+
+    def replace_a(m: re.Match) -> str:
+        inner = m.group(1).strip()
+        parts = inner.split(None, 1)
+        aid = parts[0]
+        name = parts[1] if len(parts) > 1 else "Link"
+        return f"[{name}](https://www.discogs.com/artist/{aid})"
+
+    out = re.sub(r"\[l=([^\]]+)\]", replace_l, profile)
+    out = re.sub(r"\[a=([^\]]+)\]", replace_a, out)
+    return out
 
 
 class DiscogsSource(DataSource):
@@ -114,6 +140,67 @@ class DiscogsSource(DataSource):
             print(f"Discogs artist releases error: {e}", flush=True)
         return None
     
+    def _build_personnel_card(
+        self,
+        release_id: int,
+        artists: list,
+        extraartists: list,
+        genre: list,
+        style: list,
+        track_id: str,
+    ) -> Optional[InfoCard]:
+        """Build a 'Who's playing on this album' card from Discogs artists + extraartists."""
+        lines = []
+        seen = set()
+        def _name(entry):
+            n = entry.get("name")
+            if n:
+                return n
+            art = entry.get("artist")
+            return art.get("name") if isinstance(art, dict) else None
+
+        def _artist_url(entry) -> str | None:
+            aid = entry.get("id")
+            if aid is not None:
+                return f"https://www.discogs.com/artist/{aid}"
+            art = entry.get("artist")
+            if isinstance(art, dict) and art.get("id") is not None:
+                return f"https://www.discogs.com/artist/{art['id']}"
+            return None
+
+        for a in artists or []:
+            name = _name(a)
+            if name and name not in seen:
+                seen.add(name)
+                role = (a.get("role") or "").strip()
+                link = artist_link_markdown(name, prefer_url=_artist_url(a))
+                lines.append(f"• {link} — {role}" if role else f"• {link}")
+        for a in extraartists or []:
+            name = _name(a)
+            if name and name not in seen:
+                seen.add(name)
+                role = (a.get("role") or "").strip()
+                link = artist_link_markdown(name, prefer_url=_artist_url(a))
+                lines.append(f"• {link} — {role}" if role else f"• {link}")
+        if not lines:
+            return None
+        genres = (genre or []) + (style or [])
+        is_jazz = any("jazz" in (g or "").lower() for g in genres)
+        card_title = "Who's Playing on This Album" if is_jazz else "Album Personnel"
+        summary = "\n".join(lines[:25])
+        if len(lines) > 25:
+            summary += f"\n… and {len(lines) - 25} more"
+        return InfoCard(
+            id=str(uuid.uuid4()),
+            source=CardSource.DISCOGS,
+            title=card_title,
+            summary=summary,
+            url=f"https://www.discogs.com/release/{release_id}",
+            track_id=track_id,
+            category="credits",
+            section="album",
+        )
+
     async def fetch(
         self,
         artist: str,
@@ -123,10 +210,41 @@ class DiscogsSource(DataSource):
     ) -> List[InfoCard]:
         cards = []
         
-        # Search for the release
-        release = await self._search_release(artist, track_title)
+        # Search for the release (prefer album for personnel match when available)
+        release = await self._search_release(artist, album or track_title)
+        if not release and album:
+            release = await self._search_release(artist, track_title)
         if release:
-            release_url = f"https://www.discogs.com/release/{release.get('id', '')}"
+            release_id = release.get("id")
+            # Fetch full release details for personnel (artists + extraartists)
+            details = await self._get_release_details(release_id) if release_id else None
+            if details:
+                release = details
+            release_url = f"https://www.discogs.com/release/{release_id or ''}"
+            
+            # Album personnel / who's playing (especially for jazz)
+            artists = release.get("artists") or []
+            extraartists = release.get("extraartists") or []
+            if not isinstance(artists, list):
+                artists = [artists] if artists else []
+            if not isinstance(extraartists, list):
+                extraartists = [extraartists] if extraartists else []
+            genres = release.get("genre", [])
+            styles = release.get("style", [])
+            if not isinstance(genres, list):
+                genres = [genres] if genres else []
+            if not isinstance(styles, list):
+                styles = [styles] if styles else []
+            personnel = self._build_personnel_card(
+                release_id=release_id or 0,
+                artists=artists,
+                extraartists=extraartists,
+                genre=genres,
+                style=styles,
+                track_id=track_id,
+            )
+            if personnel:
+                cards.append(personnel)
             
             # Basic release info card
             title_text = release.get("title", "")
@@ -190,10 +308,9 @@ class DiscogsSource(DataSource):
                 
                 # Only create card if we have actual profile content
                 if profile and len(profile) > 50:
-                    # Clean up profile text
-                    profile_clean = profile.replace("[a=", "").replace("[l=", "")
-                    profile_clean = profile_clean.replace("]", "").replace("[", "")
-                    
+                    # Convert Discogs link markup to markdown so existing links are kept (no Wikipedia added)
+                    profile_clean = _discogs_profile_to_markdown(profile)
+
                     summary = profile_clean[:400]
                     if len(profile_clean) > 400:
                         summary += "..."
